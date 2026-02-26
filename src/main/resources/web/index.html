@@ -7,6 +7,18 @@
     <link rel="stylesheet" href="css/all.min.css">
     <link href="css/css2.css" rel="stylesheet">
     <link rel="stylesheet" href="css/index.css">
+    <style>
+        .sidebar-quick-links { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
+        .sidebar-quick-links-title { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); }
+        .sidebar-quick-link { display: flex; align-items: flex-start; gap: 0.625rem; padding: 0.5rem 0.625rem; border: 1px solid rgba(229, 231, 235, 0.9); border-radius: 0.75rem; background: #ffffff; text-decoration: none; color: var(--text-primary); transition: border-color var(--transition-speed), background-color var(--transition-speed), transform var(--transition-speed); }
+        .sidebar-quick-link:hover { background-color: #f9fafb; border-color: rgba(79, 70, 229, 0.35); transform: translateY(-1px); }
+        .sidebar-quick-link:focus-visible { outline: none; border-color: rgba(79, 70, 229, 0.55); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.18); }
+        .sidebar-quick-link-icon { width: 1.25rem; text-align: center; margin-top: 0.125rem; color: var(--text-secondary); flex: 0 0 auto; }
+        .sidebar-quick-link-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
+        .sidebar-quick-link-domain { font-size: 0.8rem; font-weight: 700; line-height: 1.1; word-break: break-all; }
+        .sidebar-quick-link-desc { font-size: 0.7rem; color: var(--text-secondary); line-height: 1.2; }
+        .sidebar-quick-link-ext { color: var(--text-secondary); opacity: 0.8; margin-top: 0.15rem; flex: 0 0 auto; }
+    </style>
 </head>
 <body>
     <!-- Sidebar -->
@@ -55,13 +67,43 @@
                 <i class="fas fa-cog"></i>
                 <span data-i18n="nav.settings">nav.settings</span>
             </a>
-            <div style="flex: 1"></div>
-             <a href="#" class="nav-item danger" onclick="shutdownService(); return false;">
-                <i class="fas fa-power-off"></i>
-                <span data-i18n="nav.shutdown">nav.shutdown</span>
-            </a>
+<!--             <div style="flex: 1"></div> -->
+<!--              <a href="#" class="nav-item danger" onclick="shutdownService(); return false;"> -->
+<!--                 <i class="fas fa-power-off"></i> -->
+<!--                 <span data-i18n="nav.shutdown">nav.shutdown</span> -->
+<!--             </a> -->
         </nav>
         <div class="sidebar-footer">
+            <div class="sidebar-quick-links">
+                <div class="sidebar-quick-links-title">
+                    <i class="fas fa-link"></i>
+                    <span>模型下载</span>
+                </div>
+                <a class="sidebar-quick-link" href="https://huggingface.co/" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-cloud sidebar-quick-link-icon"></i>
+                    <span class="sidebar-quick-link-text">
+                        <span class="sidebar-quick-link-domain">huggingface.co</span>
+                        <span class="sidebar-quick-link-desc">Hugging Face 官方站点</span>
+                    </span>
+                    <i class="fas fa-external-link-alt sidebar-quick-link-ext"></i>
+                </a>
+                <a class="sidebar-quick-link" href="https://hf-mirror.com/" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-globe sidebar-quick-link-icon"></i>
+                    <span class="sidebar-quick-link-text">
+                        <span class="sidebar-quick-link-domain">hf-mirror.com</span>
+                        <span class="sidebar-quick-link-desc">中国大陆镜像（更快访问）</span>
+                    </span>
+                    <i class="fas fa-external-link-alt sidebar-quick-link-ext"></i>
+                </a>
+                <a class="sidebar-quick-link" href="https://modelscope.com/" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-box-open sidebar-quick-link-icon"></i>
+                    <span class="sidebar-quick-link-text">
+                        <span class="sidebar-quick-link-domain">modelscope.com</span>
+                        <span class="sidebar-quick-link-desc">ModelScope 模型库</span>
+                    </span>
+                    <i class="fas fa-external-link-alt sidebar-quick-link-ext"></i>
+                </a>
+            </div>
             <div style="font-size: 0.75rem; color: var(--text-secondary);">
                 Llama.cpp Server<br>v1.0.0
             </div>

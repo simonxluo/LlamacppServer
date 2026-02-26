@@ -90,7 +90,8 @@ function buildContent(messages, options) {
   if (sys) out.push({ role: 'system', content: sys });
   if (rolePrompt) out.push({ role: 'system', content: rolePrompt });
   // 参考酒馆的提示词
-  out.push({ role: 'system', content: '[Start a new Chat]' });
+  // 2026/2/26 去掉它
+  //out.push({ role: 'system', content: '[Start a new Chat]' });
 
   const userPrefix = getUserMessagePrefix();
   const userSuffix = getUserMessageSuffix();
