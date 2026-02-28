@@ -1070,7 +1070,7 @@ public class LlamaServer {
 				}
 			});
 			tray.addSeparator();
-			tray.addButton("退出程序", () -> System.exit(0));
+			tray.addButton("退出程序", () -> LlamaServerManager.getInstance().shutdownAll() );
 
 			tray.setDefaultAction(() -> {
 				// 双击托盘图标触发，暂时没东西

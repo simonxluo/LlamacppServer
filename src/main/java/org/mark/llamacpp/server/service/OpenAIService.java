@@ -234,7 +234,6 @@ public class OpenAIService {
 			if (requestJson.has("stream")) {
 				isStream = requestJson.get("stream").getAsBoolean();
 			}
-
 			// 获取LlamaServerManager实例
 			LlamaServerManager manager = LlamaServerManager.getInstance();
 
@@ -253,7 +252,10 @@ public class OpenAIService {
 				logger.info("模糊匹配成功: {} -> {}", modelName, actualModelId);
 			}
 
-			String body = content;
+			String body = JsonUtil.toJson(requestJson);
+			
+			//logger.info("请求内容：" + body);
+			
 			// 获取模型端口
 			Integer modelPort = manager.getModelPort(actualModelId);
 			if (modelPort == null) {
