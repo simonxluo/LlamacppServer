@@ -200,6 +200,10 @@ public class LlamaServerManager {
         return new ArrayList<>(this.modelPaths);
     }
 	
+	/**
+	 *	启动 Slot 状态轮询，定期查询已加载模型的 slots 状态并通过 WebSocket 广播。
+	 *	优化后使用 2 秒轮询间隔和 DEBUG 日志级别以减少性能影响。
+	 */
 	private void startSlotsPolling() {
 		this.slotsScheduler.scheduleAtFixedRate(() -> {
 			try {
@@ -1075,29 +1079,29 @@ public class LlamaServerManager {
 						this.modelPorts.put(modelId, port);
 					}
 					LlamaServer.sendModelLoadEvent(modelId, true, "模型加载成功", port);
-					// 这里请求一次
-					try {
-						JsonObject slotsResponse = this.handleModelSlotsGet(modelId);
-						int ctxSize = 0;
-						if (slotsResponse != null && slotsResponse.has("slots") && slotsResponse.get("slots").isJsonArray()) {
-							JsonArray slots = slotsResponse.getAsJsonArray("slots");
-							if (slots.size() > 0 && slots.get(0).isJsonObject()) {
-								JsonObject slot0 = slots.get(0).getAsJsonObject();
-								if (slot0.has("n_ctx") && !slot0.get("n_ctx").isJsonNull()) {
-									ctxSize = (int) Math.round(slot0.get("n_ctx").getAsDouble());
-								}
-							}
-						}
-						// 继续添加新东西
-						// TODO
-						
-						
-						
-						process.setCtxSize(ctxSize);
-					}catch (Exception e) {
-						e.printStackTrace();
-						process.setCtxSize(0);
-					}
+//					// 这里请求一次
+//					try {
+//						JsonObject slotsResponse = this.handleModelSlotsGet(modelId);
+//						int ctxSize = 0;
+//						if (slotsResponse != null && slotsResponse.has("slots") && slotsResponse.get("slots").isJsonArray()) {
+//							JsonArray slots = slotsResponse.getAsJsonArray("slots");
+//							if (slots.size() > 0 && slots.get(0).isJsonObject()) {
+//								JsonObject slot0 = slots.get(0).getAsJsonObject();
+//								if (slot0.has("n_ctx") && !slot0.get("n_ctx").isJsonNull()) {
+//									ctxSize = (int) Math.round(slot0.get("n_ctx").getAsDouble());
+//								}
+//							}
+//						}
+//						// 继续添加新东西
+//						// TODO
+//						
+//						
+//						
+//						process.setCtxSize(ctxSize);
+//					}catch (Exception e) {
+//						e.printStackTrace();
+//						process.setCtxSize(0);
+//					}
 					// 这里再请求一次
 					try {
 						JsonObject slotsResponse = this.handleModelSlotsGet(modelId);
