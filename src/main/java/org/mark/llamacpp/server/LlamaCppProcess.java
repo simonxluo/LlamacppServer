@@ -316,8 +316,8 @@ public class LlamaCppProcess {
 					if (this.outputHandler != null) {
 						this.outputHandler.accept(line);
 					}
-					// 过滤掉 slot 状态更新日志，减少日志量
-					if(!line.contains("update_slots") && !line.contains("log_server_r")) {
+					// 过滤掉 llama.cpp 内部调试日志，减少日志量
+					if(!line.contains("update_slots") && !line.contains("log_server_r") && !line.contains("cancel task")) {
 						logger.info(line);
 					}
 				}
@@ -339,7 +339,8 @@ public class LlamaCppProcess {
 					if (this.outputHandler != null) {
 						this.outputHandler.accept(line);
 					}
-					if(!line.contains("update_slots") && !line.contains("log_server_r")) {
+					// 过滤掉 llama.cpp 内部调试日志，减少日志量
+					if(!line.contains("update_slots") && !line.contains("log_server_r") && !line.contains("cancel task")) {
 						logger.info(line);
 					}
 				}

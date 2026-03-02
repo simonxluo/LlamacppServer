@@ -1228,10 +1228,13 @@ public class LlamaServerManager {
 		if (!cmdHasFlag(allArgs, "--metrics")) {
 			sb.append(" --metrics");
 		}
-		if (!cmdHasFlag(allArgs, "--slot-save-path")) {
-			sb.append(" --slot-save-path ");
-			sb.append(ParamTool.quoteIfNeeded(LlamaServer.getCachePath().toFile().getAbsolutePath()));
-		}
+		// 禁用 prompt cache 持久化以避免磁盘 I/O 阻塞
+		// 当 prompt state 达到几百 MB 时，磁盘写入会严重拖慢推理速度
+		// 如需启用，请在模型参数中手动添加 --slot-save-path
+		// if (!cmdHasFlag(allArgs, "--slot-save-path")) {
+		// 	sb.append(" --slot-save-path ");
+		// 	sb.append(ParamTool.quoteIfNeeded(LlamaServer.getCachePath().toFile().getAbsolutePath()));
+		// }
 		if (!cmdHasFlag(allArgs, "--cache-ram")) {
 			sb.append(" --cache-ram -1");
 		}
@@ -1283,8 +1286,16 @@ public class LlamaServerManager {
 		if (id.isEmpty()) {
 			throw new IllegalArgumentException("缺少必需的modelId参数");
 		}
-		if (!this.getLoadedProcesses().containsKey(id)) {
+		LlamaCppProcess process;
+		synchronized (this.processLock) {
+			process = this.loadedProcesses.get(id);
+		}
+		if (process == null) {
 			throw new IllegalArgumentException("模型未加载: " + id);
+		}
+		// 检查进程是否真的在运行
+		if (!process.isRunning()) {
+			throw new IllegalStateException("模型进程未运行: " + id);
 		}
 		Integer port = this.getModelPort(id);
 		if (port == null) {
