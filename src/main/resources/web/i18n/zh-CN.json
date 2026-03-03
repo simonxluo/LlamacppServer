@@ -250,7 +250,7 @@
   "common.refresh": "刷新",
   "common.retry": "重试",
   "common.reset": "重置",
-  "common.save": "保存",
+  "common.save": "保存配置",
   "common.save_failed": "保存失败",
   "common.saving": "保存中...",
   "common.search": "搜索",
