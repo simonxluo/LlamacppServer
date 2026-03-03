@@ -198,11 +198,35 @@ public class BasicRouterHandler extends SimpleChannelInboundHandler<FullHttpRequ
 	}
 	
 	/**
-	 * 	是否为API请求。
-	 * @param uri
-	 * @return
+	 * 是否为API请求。
+	 * <p>整合了路由层定义的所有 OpenAI 风格端点及系统内部 API。</p>
+	 * @param uri 请求路径
+	 * @return true 如果是 API 请求，否则 false
 	 */
 	private boolean isApiRequest(String uri) {
-		return uri != null && (uri.startsWith("/api/") || uri.startsWith("/v1") || uri.startsWith("/session") || uri.startsWith("/tokenize") || uri.startsWith("/apply-template"));
+		if (uri == null) {
+			return false;
+		}
+		// 1. 现有通用系统 API
+		if (uri.startsWith("/api/") || 
+				uri.startsWith("/session") || 
+				uri.startsWith("/tokenize") || 
+				uri.startsWith("/apply-template")) {
+			return true;
+		}
+		// 2. OpenAI 标准协议路径 (/v1/... 覆盖所有 v1 前缀的变体)
+		if (uri.startsWith("/v1")) {
+			return true;
+		}
+		// 3. 显式补充非 /v1 前缀的具体端点 (源自路由逻辑中的完整路径)
+		// 注意：这里写死具体的根路径，以确保与路由层的处理完全一致
+		if (uri.startsWith("/models") || 
+				uri.startsWith("/chat/completion") || 
+				uri.startsWith("/completions") || 
+				uri.startsWith("/embeddings") || 
+				uri.startsWith("/responses")) {
+			return true;
+		}
+		return false;
 	}
 }
