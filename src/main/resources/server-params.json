@@ -274,5 +274,33 @@
       "defaultValue": "1", 
       "description":"param.server.no_webui.desc", 
       "sort": 26
-    }
+  },
+  {
+	  "name": "param.server.reasoning_format.name", 
+	  "fullName": "--reasoning-format",
+	  "abbreviation": "--reasoning-format", 
+	  "type": "STRING",
+	  "defaultValue": "auto", 
+	  "values": [
+		  "auto",
+		  "none",
+		  "deepseek",
+		  "deepseek-legacy"
+	  ],
+	  "description":"param.server.reasoning_format.desc", 
+	  "sort": 27
+  },
+  {
+	  "name": "param.server.reasoning_budget.name", 
+	  "fullName": "--reasoning-budget",
+	  "abbreviation": "--reasoning-budget", 
+	  "type": "STRING",
+	  "defaultValue": "-1", 
+	  "values": [
+		"-1",
+		"0"
+	  ],
+	  "description":"param.server.reasoning_budget.desc", 
+	  "sort": 28
+  }
 ]
