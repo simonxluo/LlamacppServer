@@ -326,6 +326,7 @@
   "modal.model_action.model_id": "模型 ID",
   "modal.model_action.submit.benchmark": "开始测试",
   "modal.model_action.submit.load": "加载模型",
+  "modal.model_action.submit.stop": "停止模型",
   "modal.model_action.title.benchmark": "模型性能测试",
   "modal.model_action.title.config": "更新启动参数",
   "modal.model_action.title.load": "加载模型",

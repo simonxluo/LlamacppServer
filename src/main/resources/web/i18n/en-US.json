@@ -326,6 +326,7 @@
   "modal.model_action.model_id": "Model ID",
   "modal.model_action.submit.benchmark": "Start benchmark",
   "modal.model_action.submit.load": "Load Model",
+  "modal.model_action.submit.stop": "Stop Model",
   "modal.model_action.title.benchmark": "Model benchmark",
   "modal.model_action.title.config": "Update launch params",
   "modal.model_action.title.load": "Load Model",
