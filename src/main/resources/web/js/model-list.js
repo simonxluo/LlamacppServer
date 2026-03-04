@@ -311,7 +311,6 @@ function renderModelsList(models) {
                             <button class="btn-icon danger" onclick="stopModel('${model.id}')" title="${t('page.model.action.stop', '停止')}"><i class="fas fa-stop"></i></button>
                             <button class="btn-icon" onclick="viewModelDetails('${model.id}')" title="${t('page.model.action.details', '详情')}"><i class="fas fa-info-circle"></i></button>
                             <button class="btn-icon" onclick="openModelBenchmarkList(decodeURIComponent('${encodeURIComponent(model.id)}'), decodeURIComponent('${encodeURIComponent(displayName)}'))" title="${t('page.model.action.view_benchmark_results', '查看测试结果')}"><i class="fas fa-list"></i></button>
-                            <button class="btn-icon" onclick="viewModelConfig('${model.id}')" title="${t('page.model.action.view_config', '查看配置')}"><i class="fas fa-cog"></i></button>
                             <button class="btn-icon" onclick="openSlotsModal(decodeURIComponent('${encodeURIComponent(model.id)}'), decodeURIComponent('${encodeURIComponent(displayName)}'))" title="${t('modal.slots.title', '缓存管理')}"><i class="fas fa-database"></i></button>
                         `;
             } else {
@@ -325,7 +324,6 @@ function renderModelsList(models) {
                         <button class="btn-icon" onclick="viewModelDetails('${model.id}')" title="${t('page.model.action.details', '详情')}"><i class="fas fa-info-circle"></i></button>
                         <button class="btn-icon" onclick="openModelBenchmarkDialog(decodeURIComponent('${encodeURIComponent(model.id)}'), decodeURIComponent('${encodeURIComponent(displayName)}'))" title="${t('page.model.action.benchmark', '性能测试')}"><i class="fas fa-rocket"></i></button>
                         <button class="btn-icon" onclick="openModelBenchmarkList(decodeURIComponent('${encodeURIComponent(model.id)}'), decodeURIComponent('${encodeURIComponent(displayName)}'))" title="${t('page.model.action.view_benchmark_results', '查看测试结果')}"><i class="fas fa-list"></i></button>
-                        <button class="btn-icon" onclick="viewModelConfig('${model.id}')" title="${t('page.model.action.view_config', '查看配置')}"><i class="fas fa-cog"></i></button>
                     `;
         }
 

@@ -596,7 +596,7 @@ function loadModelCapabilities(modelId, modal) {
 }
 
 function setModelActionMode(mode) {
-    const resolved = mode === 'config' ? 'config' : (mode === 'benchmark' ? 'benchmark' : 'load');
+    const resolved = mode === 'benchmark' ? 'benchmark' : 'load';
     window.__modelActionMode = resolved;
     const modal = getLoadModelModal();
     const titleText = findById(modal, 'modelActionModalTitleText') || findInModal(modal, '.modal-title span');
@@ -604,6 +604,7 @@ function setModelActionMode(mode) {
     const submitBtn = findById(modal, 'modelActionSubmitBtn')
         || findInModal(modal, 'button[onclick*="submitModelAction"]')
         || findInModal(modal, '.modal-footer .btn-primary');
+    const saveBtn = findById(modal, 'modelActionSaveBtn');
     const dynamicParams = findById(modal, 'dynamicParamsContainer');
     const benchmarkParams = findById(modal, 'benchmarkParamsContainer');
     const mainGpuGroup = findById(modal, 'mainGpuGroup');
@@ -615,6 +616,7 @@ function setModelActionMode(mode) {
     if (mainGpuGroup) mainGpuGroup.style.display = '';
     if (estimateBtn) estimateBtn.style.display = resolved === 'benchmark' ? 'none' : '';
     if (resetBtn) resetBtn.style.display = resolved === 'benchmark' ? '' : 'none';
+    if (saveBtn) saveBtn.style.display = resolved === 'benchmark' ? 'none' : '';
 
     if (resolved === 'benchmark') {
         const hasBenchmarkFields = !!findInModal(modal, '#benchmarkParamsContainer input, #benchmarkParamsContainer select, #benchmarkParamsContainer textarea');
@@ -623,11 +625,7 @@ function setModelActionMode(mode) {
         }
     }
 
-    if (resolved === 'config') {
-        if (titleText) titleText.textContent = t('modal.model_action.title.config', '更新启动参数');
-        if (icon) icon.className = 'fas fa-cog';
-        if (submitBtn) submitBtn.textContent = t('common.save', '保存');
-    } else if (resolved === 'benchmark') {
+    if (resolved === 'benchmark') {
         if (titleText) titleText.textContent = t('modal.model_action.title.benchmark', '模型性能测试');
         if (icon) icon.className = 'fas fa-tachometer-alt';
         if (submitBtn) submitBtn.textContent = t('modal.model_action.submit.benchmark', '开始测试');
@@ -664,9 +662,6 @@ function loadModel(modelId, modelName, mode = 'load') {
 
     fetch(`/api/models/config/get?modelId=${encodeURIComponent(modelId)}`)
         .then(r => r.json()).then(data => {
-            if (!(data && data.success) && mode === 'config') {
-                showToast(t('toast.error', '错误'), (data && data.error) ? data.error : t('modal.model_action.config.load_failed', '获取配置失败'), 'error');
-            }
             const config = extractLaunchConfigFromGetResponse(data, modelId);
             if (config && typeof config === 'object') {
                 const cmdStr = config.cmd === null || config.cmd === undefined ? '' : String(config.cmd);
@@ -921,6 +916,59 @@ function submitModelAction() {
 
 function submitLoadModel() { submitModelAction(); }
 
+function saveModelConfigAction() {
+    const modal = getLoadModelModal();
+    const base = buildLoadModelPayload(modal);
+    const modelIdForUi = base && base.modelId ? String(base.modelId).trim() : '';
+    if (!modelIdForUi) {
+        showToast(t('toast.error', '错误'), t('modal.model_action.missing_model_id', '缺少必需的modelId参数'), 'error');
+        return;
+    }
+    const cfg = {
+        llamaBinPath: base && base.llamaBinPathSelect ? base.llamaBinPathSelect : '',
+        mg: base && base.mg !== undefined ? base.mg : -1,
+        cmd: base && base.cmd ? base.cmd : '',
+        extraParams: base && base.extraParams ? base.extraParams : '',
+        enableVision: base && base.enableVision !== undefined ? !!base.enableVision : true,
+        device: base && Array.isArray(base.device) ? base.device : ['All']
+    };
+    const payload = {};
+    payload[modelIdForUi] = cfg;
+
+    const saveBtn = findById(modal, 'modelActionSaveBtn');
+    const submitBtn = findById(modal, 'modelActionSubmitBtn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${t('common.saving', '保存中...')}`;
+    }
+    if (submitBtn) submitBtn.disabled = true;
+
+    fetch('/api/models/config/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(r => r.json()).then(res => {
+        if (res && res.success) {
+            showToast(t('toast.success', '成功'), t('modal.model_action.config.saved', '启动参数已保存'), 'success');
+            closeModal('loadModelModal');
+            return;
+        }
+        showToast(t('toast.error', '错误'), (res && res.error) ? res.error : t('common.save_failed', '保存失败'), 'error');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = t('common.save', '保存');
+        }
+        if (submitBtn) submitBtn.disabled = false;
+    }).catch(() => {
+        showToast(t('toast.error', '错误'), t('common.network_request_failed', '网络请求失败'), 'error');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = t('common.save', '保存');
+        }
+        if (submitBtn) submitBtn.disabled = false;
+    });
+}
+
 // 估算显存的功能
 function estimateVramAction() {
     const modal = getLoadModelModal();
@@ -974,7 +1022,7 @@ function estimateVram() { estimateVramAction(); }
 
 function viewModelConfig(modelId) {
     const currentModel = (currentModelsData || []).find(m => m && m.id === modelId);
-    loadModel(modelId, currentModel ? currentModel.name : modelId, 'config');
+    loadModel(modelId, currentModel ? currentModel.name : modelId, 'load');
 }
 
 function normalizeDeviceSelection(device) {

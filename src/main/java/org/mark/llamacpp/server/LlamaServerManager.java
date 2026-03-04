@@ -1710,7 +1710,6 @@ public class LlamaServerManager {
 			this.loadedProcesses.clear();
 			this.modelPorts.clear();
 		}
-
 		this.executorService.shutdown();
 	}
 	

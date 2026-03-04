@@ -35,7 +35,7 @@
                 <i class="fas fa-cubes"></i>
                 <span data-i18n="nav.model_list">nav.model_list</span>
             </a>
-            <a href="chat/completion.html" class="nav-item" target="_blank" id="nav-chat-completion">
+            <a href="chat/easy-chat.html" class="nav-item" target="_blank" id="nav-chat-completion">
                 <i class="fas fa-comments"></i>
                 <span data-i18n="nav.chat">nav.chat</span>
             </a>
@@ -630,6 +630,7 @@
                 <button class="btn btn-secondary" onclick="closeModal('loadModelModal')" data-i18n="common.cancel">common.cancel</button>
                 <button class="btn btn-secondary" id="estimateVramBtn" onclick="estimateVramAction()"><i class="fas fa-memory"></i> <span data-i18n="modal.model_action.estimate_vram">modal.model_action.estimate_vram</span></button>
                 <button class="btn btn-secondary" id="modelActionResetBtn" style="display:none;" onclick="resetModelBenchmarkForm()" data-i18n="common.reset">common.reset</button>
+                <button class="btn btn-secondary" id="modelActionSaveBtn" onclick="saveModelConfigAction()" data-i18n="common.save">common.save</button>
                 <button class="btn btn-primary" id="modelActionSubmitBtn" onclick="submitModelAction()" data-i18n="modal.model_action.submit.load">modal.model_action.submit.load</button>
             </div>
         </div>
@@ -1035,7 +1036,7 @@
             const link = document.getElementById('nav-chat-completion');
             if (!link) return;
             if (isMobileBrowser()) {
-                link.href = 'chat/completion-mobile.html';
+                link.href = 'chat/easy-chat-mobile.html';
             }
         }
         
@@ -1414,6 +1415,11 @@
                 document.getElementById('loadModelForm').reset();
                 const btn = document.getElementById('modelActionSubmitBtn');
                 if (btn) btn.disabled = false;
+                const saveBtn = document.getElementById('modelActionSaveBtn');
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = t('common.save', '保存');
+                }
                 setModelActionMode('load');
             }
             if (id === 'createDownloadModal') {
