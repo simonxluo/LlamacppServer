@@ -138,10 +138,12 @@ public class ModelInfoController implements BaseController {
 			this.handleModelSlotsLoad(ctx, request);
 			return true;
 		}
+		// 处理分词
 		if (uri.startsWith("/tokenize")) {
 			this.handleTokenizeRequest(ctx, request);
 			return true;
 		}
+		// 处理模板
 		if (uri.startsWith("/apply-template")) {
 			this.handleApplyTemplateRequest(ctx, request);
 			return true;
@@ -151,6 +153,12 @@ public class ModelInfoController implements BaseController {
 		return false;
 	}
 	
+	/**
+	 * 	模型的能力设定
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleModelCapabilitiesSetRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		this.assertRequestMethod(request.method() != HttpMethod.POST, "只支持POST请求");
 		try {
@@ -180,6 +188,12 @@ public class ModelInfoController implements BaseController {
 		}
 	}
 	
+	/**
+	 * 	查询模型的能力
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleModelCapabilitiesGetRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		this.assertRequestMethod(request.method() != HttpMethod.GET, "只支持GET请求");
 		try {
@@ -867,7 +881,13 @@ public class ModelInfoController implements BaseController {
 			LlamaServer.sendJsonResponse(ctx, ApiResponse.error("加载模型slots缓存失败: " + e.getMessage()));
 		}
 	}
-
+	
+	/**
+	 * 	分词器接口，调用llamacpp对应的API进行分词。
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleTokenizeRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -979,7 +999,13 @@ public class ModelInfoController implements BaseController {
 			}
 		}
 	}
-
+	
+	/**
+	 * 	模板化接口，调用llamacpp对应的API进行模板化。
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleApplyTemplateRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);

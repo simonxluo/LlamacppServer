@@ -49,7 +49,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.CharsetUtil;
 
 /**
- * 	预留。
+ * 	处理openai api请求的服务。
  */
 public class OpenAIService {
 	
@@ -64,9 +64,15 @@ public class OpenAIService {
 	 * 	线程池。
 	 */
 	private static final ExecutorService worker = Executors.newVirtualThreadPerTaskExecutor();
-
+	
+	/**
+	 * 	给响应头做时间转换
+	 */
 	private SimpleDateFormat sdf = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH);
 	
+	/**
+	 * 	集霸矛！
+	 */
 	public OpenAIService() {
 		
 	}
@@ -202,10 +208,10 @@ public class OpenAIService {
 		}
 	}
 	
-	
 	/**
-	 * 	处理 OpenAI 聊天补全请求
-	 * 	/v1/chat/completions
+	 * 	处理 OpenAI 聊天补全请求，/v1/chat/completions
+	 * @param ctx
+	 * @param request
 	 */
 	public void handleOpenAIChatCompletionsRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
 		try {
@@ -361,7 +367,9 @@ public class OpenAIService {
 	}
 	
 	/**
-	 * 处理 OpenAI 文本补全请求
+	 * 	处理 OpenAI 文本补全请求
+	 * @param ctx
+	 * @param request
 	 */
 	public void handleOpenAICompletionsRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
 		try {
@@ -428,7 +436,9 @@ public class OpenAIService {
 	}
 	
 	/**
-	 * 处理 OpenAI 嵌入请求
+	 * 	处理 OpenAI 嵌入请求
+	 * @param ctx
+	 * @param request
 	 */
 	public void handleOpenAIEmbeddingsRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
 		try {
@@ -468,7 +478,12 @@ public class OpenAIService {
 			this.sendOpenAIErrorResponseWithCleanup(ctx, 500, null, e.getMessage(), null);
 		}
 	}
-
+	
+	/**
+	 * 	转发rerank请求，重排序用。
+	 * @param ctx
+	 * @param request
+	 */
 	public void handleOpenAIRerankRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
 		try {
 			if (request.method() != HttpMethod.POST) {
@@ -515,7 +530,12 @@ public class OpenAIService {
 			this.sendOpenAIErrorResponseWithCleanup(ctx, 500, null, e.getMessage(), null);
 		}
 	}
-
+	
+	/**
+	 * 	对应端点：/v1/responses
+	 * @param ctx
+	 * @param request
+	 */
 	public void handleOpenAIResponsesRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
 		try {
 			if (request.method() != HttpMethod.POST) {
@@ -573,7 +593,14 @@ public class OpenAIService {
 	
 	
 	/**
-	 * 转发请求到对应的llama.cpp进程
+	 * 	转发请求到对应的llama.cpp进程
+	 * @param ctx
+	 * @param request
+	 * @param modelName
+	 * @param port
+	 * @param endpoint
+	 * @param isStream
+	 * @param requestBody
 	 */
 	private void forwardRequestToLlamaCpp(ChannelHandlerContext ctx, FullHttpRequest request, String modelName, int port, String endpoint, boolean isStream, String requestBody) {
 		// 在异步执行前先读取请求体，避免ByteBuf引用计数问题
@@ -662,7 +689,11 @@ public class OpenAIService {
 	}
 	
 	/**
-	 * 处理非流式响应
+	 * 	处理非流式响应
+	 * @param ctx
+	 * @param connection
+	 * @param responseCode
+	 * @throws IOException
 	 */
 	private void handleNonStreamResponse(ChannelHandlerContext ctx, HttpURLConnection connection, int responseCode) throws IOException {
 		// 读取响应
@@ -727,7 +758,12 @@ public class OpenAIService {
 	}
 	
 	/**
-	 * 处理流式响应
+	 * 	处理流式响应
+	 * @param ctx
+	 * @param connection
+	 * @param responseCode
+	 * @param modelName
+	 * @throws IOException
 	 */
 	private void handleStreamResponse(ChannelHandlerContext ctx, HttpURLConnection connection, int responseCode, String modelName) throws IOException {
 		// 创建响应头
@@ -885,7 +921,9 @@ public class OpenAIService {
 	}
 
 	/**
-	 * 发送OpenAI格式的JSON响应
+	 * 	发送OpenAI格式的JSON响应
+	 * @param ctx
+	 * @param data
 	 */
 	private void sendOpenAIJsonResponse(ChannelHandlerContext ctx, Object data) {
 		String json = JsonUtil.toJson(data);
@@ -913,9 +951,13 @@ public class OpenAIService {
 		});
 	}
 	
-	
 	/**
-	 * 发送OpenAI格式的错误响应并清理资源
+	 * 	发送OpenAI格式的错误响应并清理资源
+	 * @param ctx
+	 * @param httpStatus
+	 * @param openAiErrorCode
+	 * @param message
+	 * @param param
 	 */
 	private void sendOpenAIErrorResponseWithCleanup(ChannelHandlerContext ctx, int httpStatus, String openAiErrorCode, String message, String param) {
 		String type = "invalid_request_error";
@@ -949,7 +991,10 @@ public class OpenAIService {
 	
 	
 	/**
-	 * 发送OpenAI格式的JSON响应并清理资源
+	 * 	发送OpenAI格式的JSON响应并清理资源
+	 * @param ctx
+	 * @param data
+	 * @param httpStatus
 	 */
 	private void sendOpenAIJsonResponseWithCleanup(ChannelHandlerContext ctx, Object data, HttpResponseStatus httpStatus) {
 		String json = JsonUtil.toJson(data);

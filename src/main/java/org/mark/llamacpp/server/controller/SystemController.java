@@ -44,8 +44,10 @@ public class SystemController implements BaseController {
 
 	private static final Logger logger = LoggerFactory.getLogger(SystemController.class);
 	
-	
-	
+	/**
+	 * 	依旧请求入口。
+	 */
+	@Override
 	public boolean handleRequest(String uri, ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		// 停止服务API
 		if (uri.startsWith("/api/shutdown")) {
@@ -104,7 +106,13 @@ public class SystemController implements BaseController {
 		
 		return false;
 	}
-
+	
+	/**
+	 * 	文件系统：目录浏览
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleFsListRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -259,6 +267,12 @@ public class SystemController implements BaseController {
 		}
 	}
 	
+	/**
+	 * 	获取兼容服务 ollama和lmstudio 状态
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleCompatStatusRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -298,6 +312,12 @@ public class SystemController implements BaseController {
 		}
 	}
 	
+	/**
+	 * 	启用、禁用ollama兼容api
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleOllamaEnableRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -348,6 +368,12 @@ public class SystemController implements BaseController {
 		}
 	}
 	
+	/**
+	 * 	启用、禁用lm studio兼容api
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleLmstudioEnableRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -397,7 +423,13 @@ public class SystemController implements BaseController {
 			LlamaServer.sendJsonResponse(ctx, ApiResponse.error("处理lmstudio启停失败: " + e.getMessage()));
 		}
 	}
-
+	
+	/**
+	 * 	保存系统设置
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleSysSettingRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -471,6 +503,12 @@ public class SystemController implements BaseController {
 		}
 	}
 
+	/**
+	 * 	保存搜索设置
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleSearchSettingRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -514,7 +552,13 @@ public class SystemController implements BaseController {
 			LlamaServer.sendJsonResponse(ctx, ApiResponse.error("保存搜索设置失败: " + e.getMessage()));
 		}
 	}
-
+	
+	/**
+	 * 	工具
+	 * @param obj
+	 * @param keys
+	 * @return
+	 */
 	private static Integer firstPort(JsonObject obj, String... keys) {
 		if (obj == null || keys == null) {
 			return null;
@@ -527,7 +571,13 @@ public class SystemController implements BaseController {
 		}
 		return null;
 	}
-
+	
+	/**
+	 * 	工具
+	 * @param obj
+	 * @param keys
+	 * @return
+	 */
 	private static Boolean firstBoolean(JsonObject obj, String... keys) {
 		if (obj == null || keys == null) {
 			return null;
@@ -566,7 +616,12 @@ public class SystemController implements BaseController {
 		}
 		return null;
 	}
-
+	
+	/**
+	 * 	检查端口的合法性。
+	 * @param port
+	 * @return
+	 */
 	private static boolean isValidPort(int port) {
 		return port > 0 && port <= 65535;
 	}

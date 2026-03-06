@@ -722,7 +722,13 @@ public class ModelActionController implements BaseController {
 			LlamaServer.sendJsonResponse(ctx, ApiResponse.error("获取基准测试结果列表失败: " + e.getMessage()));
 		}
 	}
-
+	
+	/**
+	 * 	性能测试V2版，查询指定模型的测试结果。
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleModelBenchmarkV2Get(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		this.assertRequestMethod(request.method() != HttpMethod.GET, "只支持GET请求");
 		
