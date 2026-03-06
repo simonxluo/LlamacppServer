@@ -44,8 +44,10 @@ public class SystemController implements BaseController {
 
 	private static final Logger logger = LoggerFactory.getLogger(SystemController.class);
 	
-	
-	
+	/**
+	 * 	依旧请求入口。
+	 */
+	@Override
 	public boolean handleRequest(String uri, ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		// 停止服务API
 		if (uri.startsWith("/api/shutdown")) {
@@ -104,7 +106,13 @@ public class SystemController implements BaseController {
 		
 		return false;
 	}
-
+	
+	/**
+	 * 	文件系统：目录浏览
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleFsListRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -259,6 +267,12 @@ public class SystemController implements BaseController {
 		}
 	}
 	
+	/**
+	 * 	获取兼容服务 ollama和lmstudio 状态
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleCompatStatusRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -284,6 +298,12 @@ public class SystemController implements BaseController {
 			lmstudioData.put("running", lmstudio.isRunning());
 			lmstudioData.put("port", lmstudio.getPort());
 			data.put("lmstudio", lmstudioData);
+
+			Map<String, Object> requestLogData = new HashMap<>();
+			requestLogData.put("logRequestUrl", LlamaServer.isLogRequestUrlEnabled());
+			requestLogData.put("logRequestHeader", LlamaServer.isLogRequestHeaderEnabled());
+			requestLogData.put("logRequestBody", LlamaServer.isLogRequestBodyEnabled());
+			data.put("requestLog", requestLogData);
 			
 			LlamaServer.sendJsonResponse(ctx, ApiResponse.success(data));
 		} catch (Exception e) {
@@ -292,6 +312,12 @@ public class SystemController implements BaseController {
 		}
 	}
 	
+	/**
+	 * 	启用、禁用ollama兼容api
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleOllamaEnableRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -342,6 +368,12 @@ public class SystemController implements BaseController {
 		}
 	}
 	
+	/**
+	 * 	启用、禁用lm studio兼容api
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleLmstudioEnableRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -391,7 +423,13 @@ public class SystemController implements BaseController {
 			LlamaServer.sendJsonResponse(ctx, ApiResponse.error("处理lmstudio启停失败: " + e.getMessage()));
 		}
 	}
-
+	
+	/**
+	 * 	保存系统设置
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleSysSettingRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -412,9 +450,12 @@ public class SystemController implements BaseController {
 
 			Integer ollamaPort = firstPort(obj, "ollamaPort", "ollama_port", "ollamaCompatPort", "ollama_compat_port");
 			Integer lmstudioPort = firstPort(obj, "lmstudioPort", "lmstudio_port", "lmstudioCompatPort", "lmstudio_compat_port");
+			Boolean logRequestUrl = firstBoolean(obj, "LlamaServer.logRequestUrl", "logRequestUrl", "log_request_url");
+			Boolean logRequestHeader = firstBoolean(obj, "LlamaServer.logRequestHeader", "logRequestHeader", "log_request_header");
+			Boolean logRequestBody = firstBoolean(obj, "LlamaServer.logRequestBody", "logRequestBody", "log_request_body");
 
-			if (ollamaPort == null && lmstudioPort == null) {
-				LlamaServer.sendJsonResponse(ctx, ApiResponse.error("缺少端口参数"));
+			if (ollamaPort == null && lmstudioPort == null && logRequestUrl == null && logRequestHeader == null && logRequestBody == null) {
+				LlamaServer.sendJsonResponse(ctx, ApiResponse.error("缺少可保存参数"));
 				return;
 			}
 
@@ -434,6 +475,10 @@ public class SystemController implements BaseController {
 				LlamaServer.updateLmstudioCompatConfig(LlamaServer.isLmstudioCompatEnabled(), lmstudioPort.intValue());
 			}
 
+			if (logRequestUrl != null || logRequestHeader != null || logRequestBody != null) {
+				LlamaServer.updateRequestLogConfig(logRequestUrl, logRequestHeader, logRequestBody);
+			}
+
 			Map<String, Object> data = new HashMap<>();
 			Map<String, Object> ollama = new HashMap<>();
 			ollama.put("enabled", LlamaServer.isOllamaCompatEnabled());
@@ -445,6 +490,12 @@ public class SystemController implements BaseController {
 			lmstudio.put("port", LlamaServer.getLmstudioCompatPort());
 			data.put("lmstudio", lmstudio);
 
+			Map<String, Object> requestLog = new HashMap<>();
+			requestLog.put("logRequestUrl", LlamaServer.isLogRequestUrlEnabled());
+			requestLog.put("logRequestHeader", LlamaServer.isLogRequestHeaderEnabled());
+			requestLog.put("logRequestBody", LlamaServer.isLogRequestBodyEnabled());
+			data.put("requestLog", requestLog);
+
 			LlamaServer.sendJsonResponse(ctx, ApiResponse.success(data));
 		} catch (Exception e) {
 			logger.info("处理系统设置请求时发生错误", e);
@@ -452,6 +503,12 @@ public class SystemController implements BaseController {
 		}
 	}
 
+	/**
+	 * 	保存搜索设置
+	 * @param ctx
+	 * @param request
+	 * @throws RequestMethodException
+	 */
 	private void handleSearchSettingRequest(ChannelHandlerContext ctx, FullHttpRequest request) throws RequestMethodException {
 		if (request.method() == HttpMethod.OPTIONS) {
 			LlamaServer.sendCorsResponse(ctx);
@@ -495,7 +552,13 @@ public class SystemController implements BaseController {
 			LlamaServer.sendJsonResponse(ctx, ApiResponse.error("保存搜索设置失败: " + e.getMessage()));
 		}
 	}
-
+	
+	/**
+	 * 	工具
+	 * @param obj
+	 * @param keys
+	 * @return
+	 */
 	private static Integer firstPort(JsonObject obj, String... keys) {
 		if (obj == null || keys == null) {
 			return null;
@@ -508,7 +571,57 @@ public class SystemController implements BaseController {
 		}
 		return null;
 	}
-
+	
+	/**
+	 * 	工具
+	 * @param obj
+	 * @param keys
+	 * @return
+	 */
+	private static Boolean firstBoolean(JsonObject obj, String... keys) {
+		if (obj == null || keys == null) {
+			return null;
+		}
+		for (String k : keys) {
+			if (k == null || k.isEmpty() || !obj.has(k)) {
+				continue;
+			}
+			JsonElement v = obj.get(k);
+			if (v == null || v.isJsonNull()) {
+				continue;
+			}
+			if (v.isJsonPrimitive()) {
+				try {
+					if (v.getAsJsonPrimitive().isBoolean()) {
+						return v.getAsBoolean();
+					}
+					if (v.getAsJsonPrimitive().isString()) {
+						String raw = v.getAsString();
+						if (raw != null) {
+							String s = raw.trim().toLowerCase();
+							if ("true".equals(s) || "1".equals(s) || "yes".equals(s) || "on".equals(s)) {
+								return true;
+							}
+							if ("false".equals(s) || "0".equals(s) || "no".equals(s) || "off".equals(s)) {
+								return false;
+							}
+						}
+					}
+					if (v.getAsJsonPrimitive().isNumber()) {
+						return v.getAsInt() != 0;
+					}
+				} catch (Exception e) {
+				}
+			}
+		}
+		return null;
+	}
+	
+	/**
+	 * 	检查端口的合法性。
+	 * @param port
+	 * @return
+	 */
 	private static boolean isValidPort(int port) {
 		return port > 0 && port <= 65535;
 	}

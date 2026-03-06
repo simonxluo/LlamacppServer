@@ -49,7 +49,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.CharsetUtil;
 
 /**
- * 	预留。
+ * 	处理openai api请求的服务。
  */
 public class OpenAIService {
 	
@@ -64,9 +64,15 @@ public class OpenAIService {
 	 * 	线程池。
 	 */
 	private static final ExecutorService worker = Executors.newVirtualThreadPerTaskExecutor();
-
+	
+	/**
+	 * 	给响应头做时间转换
+	 */
 	private SimpleDateFormat sdf = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH);
 	
+	/**
+	 * 	集霸矛！
+	 */
 	public OpenAIService() {
 		
 	}
@@ -198,10 +204,10 @@ public class OpenAIService {
 		}
 	}
 	
-	
 	/**
-	 * 	处理 OpenAI 聊天补全请求
-	 * 	/v1/chat/completions
+	 * 	处理 OpenAI 聊天补全请求，/v1/chat/completions
+	 * @param ctx
+	 * @param request
 	 */
 	public void handleOpenAIChatCompletionsRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
 		try {
@@ -220,9 +226,13 @@ public class OpenAIService {
 
 			// 解析JSON请求体
 			JsonObject requestJson = JsonUtil.fromJson(content, JsonObject.class);
-
+			if (requestJson == null) {
+				this.sendOpenAIErrorResponseWithCleanup(ctx, 400, null, "Request body is not a valid JSON object", null);
+				return;
+			}
+			
 			// 获取模型名称
-			if (!requestJson.has("model")) {
+			if (!requestJson.has("model") || requestJson.get("model") == null || requestJson.get("model").isJsonNull()) {
 				this.sendOpenAIErrorResponseWithCleanup(ctx, 400, null, "Missing required parameter: model", "model");
 				return;
 			}
@@ -232,7 +242,10 @@ public class OpenAIService {
 			// 检查是否为流式请求
 			boolean isStream = false;
 			if (requestJson.has("stream")) {
-				isStream = requestJson.get("stream").getAsBoolean();
+				try {
+					isStream = requestJson.get("stream").getAsBoolean();
+				} catch (Exception ignore) {
+				}
 			}
 //			// 这个东西暂时用于控制enable_thinking，实际上是不完善的，临时解决吧。
 //			if (requestJson.has("enable_thinking") && !requestJson.has("chat_template_kwargs")) {
@@ -243,40 +256,78 @@ public class OpenAIService {
 //				requestJson.add("chat_template_kwargs", chatTemplateKwargs);
 //			}
 			
+			//==============================================================================================
 			// 定义一个辅助函数逻辑，判断是否需要注入 chat_template_kwargs
 			// 这个东西暂时用于控制enable_thinking，实际上是不完善的，临时解决吧。
 			// 额外的判断："thinking":{"type":"disabled"}
 			boolean needInjection = false;
 			boolean enableValueStr = true;
 			// 1. 检查传统字段 "enable_thinking"
-			if (requestJson.has("enable_thinking") && !requestJson.has("chat_template_kwargs")) {
-				needInjection = true;
-				enableValueStr = requestJson.get("enable_thinking").getAsBoolean();
+			if (requestJson.has("enable_thinking")) {
+				try {
+					JsonElement et = requestJson.get("enable_thinking");
+					if (et != null && !et.isJsonNull() && et.isJsonPrimitive()) {
+						if (et.getAsJsonPrimitive().isBoolean()) {
+							needInjection = true;
+							enableValueStr = et.getAsBoolean();
+						} else if (et.getAsJsonPrimitive().isString()) {
+							needInjection = true;
+							enableValueStr = Boolean.parseBoolean(et.getAsString().trim());
+						}
+					}
+				} catch (Exception ignore) {
+				}
 			}
 			// 2. 检查额外的"thinking":{"type":"disabled"}
 			if (!needInjection) {
-				if (requestJson.has("thinking") && !requestJson.has("chat_template_kwargs")) {
-					JsonElement thinkingEl = requestJson.get("thinking");
-					JsonObject thinkingObj = thinkingEl.getAsJsonObject();
-					String typeVal = "";
-					if (thinkingObj.has("type")) {
-						typeVal = thinkingObj.get("type").getAsString().toLowerCase().trim();
-					}
-					// 核心判断：如果 type 是 "disabled"，视为需要处理（通常映射为 enable_thinking: false）
-					if ("disabled".equals(typeVal.toLowerCase())) {
-						needInjection = true;
-						enableValueStr = false;
+				if (requestJson.has("thinking")) {
+					try {
+						JsonElement thinkingEl = requestJson.get("thinking");
+						if (thinkingEl != null && !thinkingEl.isJsonNull() && thinkingEl.isJsonObject()) {
+							JsonObject thinkingObj = thinkingEl.getAsJsonObject();
+							String typeVal = "";
+							if (thinkingObj.has("type")) {
+								JsonElement typeEl = thinkingObj.get("type");
+								if (typeEl != null && !typeEl.isJsonNull() && typeEl.isJsonPrimitive()
+										&& typeEl.getAsJsonPrimitive().isString()) {
+									typeVal = typeEl.getAsString().toLowerCase().trim();
+								}
+							}
+							// 核心判断：如果 type 是 "disabled"，视为需要处理（通常映射为 enable_thinking: false）
+							if ("disabled".equals(typeVal.toLowerCase())) {
+								needInjection = true;
+								enableValueStr = false;
+							}
+						}
+					} catch (Exception ignore) {
 					}
 				}
 			}
 			if (needInjection) {
-				// 拼接一个chat_template_kwargs进去： "chat_template_kwargs" : {"enable_thinking":
-				// false},
-				JsonObject chatTemplateKwargs = new JsonObject();
+				// 拼接一个chat_template_kwargs进去： "chat_template_kwargs" : {"enable_thinking": false},
+				// 分两种情况
+				// 没有这个模板注入，那就直接新建一个丢进去
+				JsonObject chatTemplateKwargs = null;
+				if (requestJson.has("chat_template_kwargs")) {
+					try {
+						JsonElement kwargsEl = requestJson.get("chat_template_kwargs");
+						if (kwargsEl != null && !kwargsEl.isJsonNull()) {
+							if (kwargsEl.isJsonObject()) {
+								chatTemplateKwargs = kwargsEl.getAsJsonObject();
+							} else if (kwargsEl.isJsonPrimitive() && kwargsEl.getAsJsonPrimitive().isString()) {
+								chatTemplateKwargs = JsonUtil.tryParseObject(kwargsEl.getAsString());
+							}
+						}
+					} catch (Exception ignore) {
+					}
+				}
+				if (chatTemplateKwargs == null) {
+					chatTemplateKwargs = new JsonObject();
+				}
 				chatTemplateKwargs.addProperty("enable_thinking", enableValueStr);
 				requestJson.add("chat_template_kwargs", chatTemplateKwargs);
 			}
-			
+			//==============================================================================================
 			// 获取LlamaServerManager实例
 			LlamaServerManager manager = LlamaServerManager.getInstance();
 
@@ -314,7 +365,9 @@ public class OpenAIService {
 	}
 	
 	/**
-	 * 处理 OpenAI 文本补全请求
+	 * 	处理 OpenAI 文本补全请求
+	 * @param ctx
+	 * @param request
 	 */
 	public void handleOpenAICompletionsRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
 		try {
@@ -381,7 +434,9 @@ public class OpenAIService {
 	}
 	
 	/**
-	 * 处理 OpenAI 嵌入请求
+	 * 	处理 OpenAI 嵌入请求
+	 * @param ctx
+	 * @param request
 	 */
 	public void handleOpenAIEmbeddingsRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
 		try {
@@ -421,7 +476,64 @@ public class OpenAIService {
 			this.sendOpenAIErrorResponseWithCleanup(ctx, 500, null, e.getMessage(), null);
 		}
 	}
+	
+	/**
+	 * 	转发rerank请求，重排序用。
+	 * @param ctx
+	 * @param request
+	 */
+	public void handleOpenAIRerankRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
+		try {
+			if (request.method() != HttpMethod.POST) {
+				this.sendOpenAIErrorResponseWithCleanup(ctx, 405, null, "Only POST method is supported", "method");
+				return;
+			}
+			String content = request.content().toString(CharsetUtil.UTF_8);
+			if (content == null || content.trim().isEmpty()) {
+				this.sendOpenAIErrorResponseWithCleanup(ctx, 400, null, "Request body is empty", "query");
+				return;
+			}
+			JsonObject requestJson = JsonUtil.fromJson(content, JsonObject.class);
+			LlamaServerManager manager = LlamaServerManager.getInstance();
+			String modelName;
+			if (!requestJson.has("model")) {
+				modelName = manager.getFirstModelName();
+				if (modelName == null) {
+					this.sendOpenAIErrorResponseWithCleanup(ctx, 404, null, "No models are currently loaded", null);
+					return;
+				}
+			} else {
+				modelName = requestJson.get("model").getAsString();
+			}
+			if (!manager.getLoadedProcesses().containsKey(modelName)) {
+				this.sendOpenAIErrorResponseWithCleanup(ctx, 404, null, "Model not found: " + modelName, "model");
+				return;
+			}
+			Integer modelPort = manager.getModelPort(modelName);
+			if (modelPort == null) {
+				this.sendOpenAIErrorResponseWithCleanup(ctx, 500, null, "Model port not found: " + modelName, null);
+				return;
+			}
 
+			String endpoint = request.uri();
+			if (endpoint != null && endpoint.startsWith("/rerank")) {
+				endpoint = "/v1" + endpoint;
+			}
+			if (endpoint == null || endpoint.isBlank()) {
+				endpoint = "/v1/rerank";
+			}
+			this.forwardRequestToLlamaCpp(ctx, request, modelName, modelPort, endpoint, false, content);
+		} catch (Exception e) {
+			logger.info("处理OpenAI rerank 请求时发生错误", e);
+			this.sendOpenAIErrorResponseWithCleanup(ctx, 500, null, e.getMessage(), null);
+		}
+	}
+	
+	/**
+	 * 	对应端点：/v1/responses
+	 * @param ctx
+	 * @param request
+	 */
 	public void handleOpenAIResponsesRequest(ChannelHandlerContext ctx, FullHttpRequest request) {
 		try {
 			if (request.method() != HttpMethod.POST) {
@@ -479,7 +591,14 @@ public class OpenAIService {
 	
 	
 	/**
-	 * 转发请求到对应的llama.cpp进程
+	 * 	转发请求到对应的llama.cpp进程
+	 * @param ctx
+	 * @param request
+	 * @param modelName
+	 * @param port
+	 * @param endpoint
+	 * @param isStream
+	 * @param requestBody
 	 */
 	private void forwardRequestToLlamaCpp(ChannelHandlerContext ctx, FullHttpRequest request, String modelName, int port, String endpoint, boolean isStream, String requestBody) {
 		// 在异步执行前先读取请求体，避免ByteBuf引用计数问题
@@ -568,7 +687,11 @@ public class OpenAIService {
 	}
 	
 	/**
-	 * 处理非流式响应
+	 * 	处理非流式响应
+	 * @param ctx
+	 * @param connection
+	 * @param responseCode
+	 * @throws IOException
 	 */
 	private void handleNonStreamResponse(ChannelHandlerContext ctx, HttpURLConnection connection, int responseCode) throws IOException {
 		// 读取响应
@@ -633,7 +756,12 @@ public class OpenAIService {
 	}
 	
 	/**
-	 * 处理流式响应
+	 * 	处理流式响应
+	 * @param ctx
+	 * @param connection
+	 * @param responseCode
+	 * @param modelName
+	 * @throws IOException
 	 */
 	private void handleStreamResponse(ChannelHandlerContext ctx, HttpURLConnection connection, int responseCode, String modelName) throws IOException {
 		// 创建响应头
@@ -791,7 +919,9 @@ public class OpenAIService {
 	}
 
 	/**
-	 * 发送OpenAI格式的JSON响应
+	 * 	发送OpenAI格式的JSON响应
+	 * @param ctx
+	 * @param data
 	 */
 	private void sendOpenAIJsonResponse(ChannelHandlerContext ctx, Object data) {
 		String json = JsonUtil.toJson(data);
@@ -819,9 +949,13 @@ public class OpenAIService {
 		});
 	}
 	
-	
 	/**
-	 * 发送OpenAI格式的错误响应并清理资源
+	 * 	发送OpenAI格式的错误响应并清理资源
+	 * @param ctx
+	 * @param httpStatus
+	 * @param openAiErrorCode
+	 * @param message
+	 * @param param
 	 */
 	private void sendOpenAIErrorResponseWithCleanup(ChannelHandlerContext ctx, int httpStatus, String openAiErrorCode, String message, String param) {
 		String type = "invalid_request_error";
@@ -855,7 +989,10 @@ public class OpenAIService {
 	
 	
 	/**
-	 * 发送OpenAI格式的JSON响应并清理资源
+	 * 	发送OpenAI格式的JSON响应并清理资源
+	 * @param ctx
+	 * @param data
+	 * @param httpStatus
 	 */
 	private void sendOpenAIJsonResponseWithCleanup(ChannelHandlerContext ctx, Object data, HttpResponseStatus httpStatus) {
 		String json = JsonUtil.toJson(data);

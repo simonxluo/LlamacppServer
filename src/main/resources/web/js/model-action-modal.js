@@ -595,15 +595,62 @@ function loadModelCapabilities(modelId, modal) {
         });
 }
 
+function getCurrentModelById(modelId) {
+    const mid = modelId === null || modelId === undefined ? '' : String(modelId).trim();
+    if (!mid) return null;
+    const list = Array.isArray(currentModelsData) ? currentModelsData : [];
+    for (let i = 0; i < list.length; i++) {
+        const model = list[i];
+        if (model && String(model.id) === mid) return model;
+    }
+    return null;
+}
+
+function resolveModelActionSubmitIntent(mode, modelId) {
+    if (mode === 'benchmark') return 'benchmark';
+    if (mode === 'config') return 'config';
+    const model = getCurrentModelById(modelId);
+    if (model && !!model.isLoaded) return 'stop';
+    return 'load';
+}
+
+function applyModelActionSubmitButtonState(modal, mode) {
+    const submitBtn = findById(modal, 'modelActionSubmitBtn')
+        || findInModal(modal, 'button[onclick*="submitModelAction"]')
+        || findInModal(modal, '.modal-footer .btn-primary');
+    if (!submitBtn) return;
+    const modelId = getFieldString(modal, ['modelId']);
+    const intent = resolveModelActionSubmitIntent(mode, modelId);
+    window.__modelActionSubmitIntent = intent;
+    if (intent === 'benchmark') {
+        submitBtn.classList.remove('btn-danger');
+        submitBtn.classList.add('btn-primary');
+        submitBtn.textContent = t('modal.model_action.submit.benchmark', '开始测试');
+        return;
+    }
+    if (intent === 'config') {
+        submitBtn.classList.remove('btn-danger');
+        submitBtn.classList.add('btn-primary');
+        submitBtn.textContent = t('common.save', '保存');
+        return;
+    }
+    if (intent === 'stop') {
+        submitBtn.classList.remove('btn-primary');
+        submitBtn.classList.add('btn-danger');
+        submitBtn.textContent = t('modal.model_action.submit.stop', '停止模型');
+        return;
+    }
+    submitBtn.classList.remove('btn-danger');
+    submitBtn.classList.add('btn-primary');
+    submitBtn.textContent = t('modal.model_action.submit.load', '加载模型');
+}
+
 function setModelActionMode(mode) {
     const resolved = mode === 'benchmark' ? 'benchmark' : 'load';
     window.__modelActionMode = resolved;
     const modal = getLoadModelModal();
     const titleText = findById(modal, 'modelActionModalTitleText') || findInModal(modal, '.modal-title span');
     const icon = findById(modal, 'modelActionModalIcon') || findInModal(modal, '.modal-title i');
-    const submitBtn = findById(modal, 'modelActionSubmitBtn')
-        || findInModal(modal, 'button[onclick*="submitModelAction"]')
-        || findInModal(modal, '.modal-footer .btn-primary');
     const saveBtn = findById(modal, 'modelActionSaveBtn');
     const dynamicParams = findById(modal, 'dynamicParamsContainer');
     const benchmarkParams = findById(modal, 'benchmarkParamsContainer');
@@ -628,12 +675,11 @@ function setModelActionMode(mode) {
     if (resolved === 'benchmark') {
         if (titleText) titleText.textContent = t('modal.model_action.title.benchmark', '模型性能测试');
         if (icon) icon.className = 'fas fa-tachometer-alt';
-        if (submitBtn) submitBtn.textContent = t('modal.model_action.submit.benchmark', '开始测试');
     } else {
         if (titleText) titleText.textContent = t('modal.model_action.title.load', '加载模型');
         if (icon) icon.className = 'fas fa-upload';
-        if (submitBtn) submitBtn.textContent = t('modal.model_action.submit.load', '加载模型');
     }
+    applyModelActionSubmitButtonState(modal, resolved);
 }
 
 function loadModel(modelId, modelName, mode = 'load') {
@@ -643,6 +689,7 @@ function loadModel(modelId, modelName, mode = 'load') {
     setModelActionMode(mode);
     setFieldValue(modal, ['modelId'], modelId);
     setFieldValue(modal, ['modelName'], modelName || modelId);
+    applyModelActionSubmitButtonState(modal, mode === 'benchmark' ? 'benchmark' : 'load');
     const hint = findById(modal, 'ctxSizeVramHint');
     if (hint) hint.textContent = '';
     ensureModelCapabilitiesWired(modal);
@@ -820,6 +867,48 @@ function submitModelAction() {
         showToast(t('toast.error', '错误'), t('modal.model_action.benchmark.missing_handler', '未找到模型性能测试函数'), 'error');
         return;
     }
+    const submitIntent = resolveModelActionSubmitIntent(mode, getFieldString(modal, ['modelId']));
+    if (mode === 'load' && submitIntent === 'stop') {
+        const modelIdForStop = getFieldString(modal, ['modelId']);
+        const submitBtn = findById(modal, 'modelActionSubmitBtn')
+            || findInModal(modal, 'button[onclick*="submitModelAction"]')
+            || findInModal(modal, '.modal-footer .btn-primary');
+        if (!modelIdForStop) {
+            showToast(t('toast.error', '错误'), t('modal.model_action.missing_model_id', '缺少必需的modelId参数'), 'error');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                applyModelActionSubmitButtonState(modal, mode);
+            }
+            return;
+        }
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${t('common.processing', '处理中...')}`;
+        }
+        fetch('/api/models/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ modelId: modelIdForStop })
+        }).then(r => r.json()).then(res => {
+            if (!res || !res.success) {
+                showToast(t('toast.error', '错误'), (res && res.error) ? res.error : t('common.operation_failed', '操作失败'), 'error');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    applyModelActionSubmitButtonState(modal, mode);
+                }
+                return;
+            }
+            if (typeof removeModelLoadingState === 'function') removeModelLoadingState(modelIdForStop);
+            closeModal('loadModelModal');
+        }).catch(() => {
+            showToast(t('toast.error', '错误'), t('common.network_request_failed', '网络请求失败'), 'error');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                applyModelActionSubmitButtonState(modal, mode);
+            }
+        });
+        return;
+    }
 
     let payload = null;
     let modelIdForUi = getFieldString(modal, ['modelId']);
@@ -848,7 +937,7 @@ function submitModelAction() {
         showToast(t('toast.error', '错误'), t('modal.model_action.missing_model_id', '缺少必需的modelId参数'), 'error');
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = mode === 'config' ? t('common.save', '保存') : t('modal.model_action.submit.load', '加载模型');
+            applyModelActionSubmitButtonState(modal, mode);
         }
         return;
     }
@@ -858,10 +947,18 @@ function submitModelAction() {
         const extraParams = payload && payload.extraParams ? String(payload.extraParams).trim() : '';
         if (!llamaBinPathSelect) {
             showToast(t('toast.error', '错误'), t('modal.model_action.missing_llama_bin_path', '未提供llamaBinPath'), 'error');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                applyModelActionSubmitButtonState(modal, mode);
+            }
             return;
         }
         if (!cmd && !extraParams) {
             showToast(t('toast.error', '错误'), t('modal.model_action.missing_launch_params', '缺少必需的启动参数'), 'error');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                applyModelActionSubmitButtonState(modal, mode);
+            }
             return;
         }
         payload.llamaBinPathSelect = llamaBinPathSelect;
@@ -902,14 +999,14 @@ function submitModelAction() {
             showToast(t('toast.error', '错误'), res.error || (mode === 'config' ? t('common.save_failed', '保存失败') : t('common.load_failed', '加载失败')), 'error');
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.textContent = mode === 'config' ? t('common.save', '保存') : t('modal.model_action.submit.load', '加载模型');
+                applyModelActionSubmitButtonState(modal, mode);
             }
         }
     }).catch(() => {
         showToast(t('toast.error', '错误'), t('common.network_request_failed', '网络请求失败'), 'error');
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = mode === 'config' ? t('common.save', '保存') : t('modal.model_action.submit.load', '加载模型');
+            applyModelActionSubmitButtonState(modal, mode);
         }
     });
 }
@@ -1142,7 +1239,9 @@ function updateSelectedDevicesCacheFromChecklist() {
 function syncMainGpuSelectWithChecklist() {
     const modal = getLoadModelModal();
     const mainGpuEl = findById(modal, 'mainGpuSelect');
-    if (mainGpuEl) window.__loadModelMainGpu = getSelectedMainGpu();
+    if (mainGpuEl && !window.__loadModelSelectionFromConfig) {
+        window.__loadModelMainGpu = getSelectedMainGpu();
+    }
     updateSelectedDevicesCacheFromChecklist();
     renderMainGpuSelect(window.__availableDevices || [], window.__loadModelSelectedDevices || []);
     window.__loadModelSelectionFromConfig = false;
@@ -1156,7 +1255,7 @@ function loadDeviceList() {
         updateSelectedDevicesCacheFromChecklist();
     }
     const mainGpuEl = findById(modal, 'mainGpuSelect');
-    if (mainGpuEl && mainGpuEl.options && mainGpuEl.options.length > 1) {
+    if (!window.__loadModelSelectionFromConfig && mainGpuEl && mainGpuEl.options && mainGpuEl.options.length > 1) {
         window.__loadModelMainGpu = getSelectedMainGpu();
     }
     const llamaSelect = findById(modal, 'llamaBinPathSelect') || findFieldByName(modal, 'llamaBinPathSelect');

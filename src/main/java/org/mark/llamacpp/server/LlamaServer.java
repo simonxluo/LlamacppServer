@@ -247,6 +247,24 @@ public class LlamaServer {
     
     public static final PrintStream err = System.err;
     
+    //##############################################################################################################################
+    
+    /**
+     * 	日志相关：打印请求的URL
+     */
+    public static boolean logRequestUrl = true;
+    
+    /**
+     * 	日志相关：打印请求的请求头。调试用
+     */
+    public static boolean logRequestHeader = true;
+    
+    /**
+     * 	日志相关：打印请求的请求体。调试用
+     */
+    public static boolean logRequestBody = false;
+    
+    
     // 一些默认的目录，必须创建
     static {
     	// 默认的模型目录
@@ -334,6 +352,21 @@ public class LlamaServer {
 				}
 			}
 		}
+		
+		if (root.has("logging")) {
+			JsonObject logging = root.getAsJsonObject("logging");
+			if (logging != null) {
+				if (logging.has("logRequestUrl")) {
+					logRequestUrl = logging.get("logRequestUrl").getAsBoolean();
+				}
+				if (logging.has("logRequestHeader")) {
+					logRequestHeader = logging.get("logRequestHeader").getAsBoolean();
+				}
+				if (logging.has("logRequestBody")) {
+					logRequestBody = logging.get("logRequestBody").getAsBoolean();
+				}
+			}
+		}
 	}
     
     /**
@@ -370,6 +403,12 @@ public class LlamaServer {
 				compat.add("lmstudio", lmstudio);
 				
 				root.add("compat", compat);
+				
+				JsonObject logging = new JsonObject();
+				logging.addProperty("logRequestUrl", logRequestUrl);
+				logging.addProperty("logRequestHeader", logRequestHeader);
+				logging.addProperty("logRequestBody", logRequestBody);
+				root.add("logging", logging);
 	
 				String json = GSON.toJson(root);
 	
@@ -489,6 +528,18 @@ public class LlamaServer {
     	return lmstudioCompatPort;
     }
     
+    public static boolean isLogRequestUrlEnabled() {
+    	return logRequestUrl;
+    }
+    
+    public static boolean isLogRequestHeaderEnabled() {
+    	return logRequestHeader;
+    }
+    
+    public static boolean isLogRequestBodyEnabled() {
+    	return logRequestBody;
+    }
+    
     public static void updateOllamaCompatConfig(boolean enabled, int port) {
     	synchronized (APPLICATION_CONFIG_LOCK) {
     		ollamaCompatEnabled = enabled;
@@ -504,6 +555,21 @@ public class LlamaServer {
     		lmstudioCompatEnabled = enabled;
     		if (port > 0 && port <= 65535) {
     			lmstudioCompatPort = port;
+    		}
+    		saveApplicationConfig();
+    	}
+    }
+    
+    public static void updateRequestLogConfig(Boolean urlEnabled, Boolean headerEnabled, Boolean bodyEnabled) {
+    	synchronized (APPLICATION_CONFIG_LOCK) {
+    		if (urlEnabled != null) {
+    			logRequestUrl = urlEnabled.booleanValue();
+    		}
+    		if (headerEnabled != null) {
+    			logRequestHeader = headerEnabled.booleanValue();
+    		}
+    		if (bodyEnabled != null) {
+    			logRequestBody = bodyEnabled.booleanValue();
     		}
     		saveApplicationConfig();
     	}

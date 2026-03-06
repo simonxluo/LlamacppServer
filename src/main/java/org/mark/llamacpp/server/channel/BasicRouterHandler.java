@@ -30,6 +30,7 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 
 /**
@@ -85,7 +86,21 @@ public class BasicRouterHandler extends SimpleChannelInboundHandler<FullHttpRequ
 			return;
 		}
 		String uri = request.uri();
-		logger.info("收到请求：{}", uri);
+		
+		// 这里是日志专区
+		// 1.
+		if(LlamaServer.logRequestUrl) {
+			logger.info("DEBUG - 收到请求：{}", uri);	
+		}
+		// 2.
+		if(LlamaServer.logRequestHeader) {
+			logger.info("DEBUG - 请求头：{}", request.headers());
+		}
+		// 3.
+		if(LlamaServer.logRequestBody) {
+			logger.info("DEBUG - 请求体：{}", request.content().toString(CharsetUtil.UTF_8));
+		}
+		
 		// Chrome DevTools 内部请求，直接返回 404
 		if ("/.well-known/appspecific/com.chrome.devtools.json".equals(uri)) {
 			LlamaServer.sendErrorResponse(ctx, HttpResponseStatus.NOT_FOUND, "Not Found");
@@ -223,9 +238,11 @@ public class BasicRouterHandler extends SimpleChannelInboundHandler<FullHttpRequ
 		if (uri.startsWith("/models") || 
 				uri.startsWith("/chat/completion") || 
 				uri.startsWith("/completions") || 
-				uri.startsWith("/embeddings") || 
+				uri.startsWith("/embeddings") ||
+				uri.startsWith("/rerank") || 
 				uri.startsWith("/responses")) {
-			return true;
+			if(!uri.endsWith(".html"))
+				return true;
 		}
 		return false;
 	}
