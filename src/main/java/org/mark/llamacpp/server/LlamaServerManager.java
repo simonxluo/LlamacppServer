@@ -1204,12 +1204,14 @@ public class LlamaServerManager {
 				if (!"All".equals(device.get(0))) {
 					sb.append(" -sm none -dev ");
 					sb.append(ParamTool.quoteIfNeeded(device.get(0)));
-					sb.append(" -mg ");
-					sb.append(mg != null ? String.valueOf(mg) : "0");
 				}
 			} else {
 				sb.append(" -dev ");
 				sb.append(ParamTool.quoteIfNeeded(String.join(",", device)));
+			}
+			if(mg >= 0) {
+				sb.append(" -mg ");
+				sb.append(mg != null ? String.valueOf(mg) : "0");	
 			}
 		}
 
