@@ -593,26 +593,26 @@ public class ModelInfoController implements BaseController {
 				LlamaServer.sendJsonResponse(ctx, ApiResponse.error("未找到指定模型: " + modelId));
 				return;
 			}
-			Map<String, Object> metadata = new HashMap<>();
-			GGUFMetaData primary = model.getPrimaryModel();
-			if (primary != null) {
-				Map<String, Object> m = GGUFMetaDataReader.read(new File(primary.getFilePath()));
-				if (m != null) {
-					m.remove("tokenizer.ggml.merges");
-					//m.remove("tokenizer.chat_template");
-					m.remove("tokenizer.ggml.token_type");
-					metadata.putAll(m);
-				}
-			}
-			GGUFMetaData mmproj = model.getMmproj();
-			if (mmproj != null) {
-				Map<String, Object> m2 = GGUFMetaDataReader.read(new File(mmproj.getFilePath()));
-				if (m2 != null) {
-					for (Map.Entry<String, Object> e : m2.entrySet()) {
-						metadata.put("mmproj." + e.getKey(), e.getValue());
-					}
-				}
-			}
+//			Map<String, Object> metadata = new HashMap<>();
+//			GGUFMetaData primary = model.getPrimaryModel();
+//			if (primary != null) {
+//				Map<String, Object> m = GGUFMetaDataReader.read(new File(primary.getFilePath()));
+//				if (m != null) {
+//					m.remove("tokenizer.ggml.merges");
+//					//m.remove("tokenizer.chat_template");
+//					m.remove("tokenizer.ggml.token_type");
+//					metadata.putAll(m);
+//				}
+//			}
+//			GGUFMetaData mmproj = model.getMmproj();
+//			if (mmproj != null) {
+//				Map<String, Object> m2 = GGUFMetaDataReader.read(new File(mmproj.getFilePath()));
+//				if (m2 != null) {
+//					for (Map.Entry<String, Object> e : m2.entrySet()) {
+//						metadata.put("mmproj." + e.getKey(), e.getValue());
+//					}
+//				}
+//			}
 			boolean isLoaded = manager.getLoadedProcesses().containsKey(modelId);
 			String startCmd = isLoaded ? manager.getModelStartCmd(modelId) : null;
 			Integer port = manager.getModelPort(modelId);
@@ -621,7 +621,7 @@ public class ModelInfoController implements BaseController {
 			modelMap.put("name", alias != null && !alias.isEmpty() ? alias : modelId);
 			modelMap.put("path", model.getPath());
 			modelMap.put("size", model.getSize());
-			modelMap.put("metadata", metadata);
+			//modelMap.put("metadata", metadata);
 			modelMap.put("isLoaded", isLoaded);
 			if (startCmd != null && !startCmd.isEmpty()) {
 				modelMap.put("startCmd", startCmd);
