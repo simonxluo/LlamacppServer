@@ -20,7 +20,7 @@ function showModelDetailModal(model) {
     const isMobileView = !!document.getElementById('mobileMainModels') || /index-mobile\.html$/i.test((location && location.pathname) ? location.pathname : '');
     let tabs = `<div style="display:flex; gap:8px; margin-bottom:12px;">` +
                 `<button class="btn btn-secondary" id="${modalId}TabInfo">${t('modal.model_detail.tab.overview', '概览')}</button>` +
-                `<button class="btn btn-secondary" id="${modalId}TabMetrics">metrics</button>` +
+                `<button class="btn btn-secondary" id="${modalId}TabSampling">${t('modal.model_detail.tab.sampling', '采样设置')}</button>` +
                 `<button class="btn btn-secondary" id="${modalId}TabProps">props</button>` +
                 `<button class="btn btn-secondary" id="${modalId}TabChatTemplate">${t('modal.model_detail.tab.chat_template', '聊天模板')}</button>` +
                 `<button class="btn btn-secondary" id="${modalId}TabToken">${t('modal.model_detail.tab.token', 'Token计算')}</button>` +
@@ -39,12 +39,17 @@ function showModelDetailModal(model) {
                     `${(() => { let s=''; if (model.metadata) { for (const [k,v] of Object.entries(model.metadata)) { s += `<div><strong>${k}:</strong></div><div style="word-break:break-all;">${v}</div>`; } } return s; })()}` +
                     `</div>` +
                     `</div>`;
-    let metricsPanel = `<div id="${modalId}MetricsPanel" style="display:none; height:100%;">` +
-                       `<div style="display:flex; gap:8px; margin-bottom:8px;">` +
-                       `<button class="btn btn-primary" id="${modalId}MetricsFetchBtn">${t('modal.model_detail.metrics.fetch', '请求 metrics')}</button>` +
-                       `</div>` +
-                       `<pre id="${modalId}MetricsViewer" style="height:calc(100% - 48px); overflow:auto; font-size:13px; background:#111827; color:#e5e7eb; padding:10px; border-radius:0.75rem;"></pre>` +
-                       `</div>`;
+    let samplingPanel = `<div id="${modalId}SamplingPanel" style="display:none; height:100%; overflow:auto;">` +
+                        `<div style="padding:10px 12px; border-radius:0.75rem; background:#f3f4f6; color:#111827; line-height:1.7; margin-bottom:12px;">` +
+                        `${t('modal.model_detail.sampling.desc', '开启该功能后，将强制使用指定的采样配置，而忽略其它客户端中的采样。比如你在这里强制设置温度为1.0，而在openwebui中设置温度为0.7，此时llamacpp将忽略0.7，使用1.0。这个功能的意义是为了快速切换采样来变更模型的工作模式，比如Qwen3.5，它对采样的敏感度非常高，而且有多种采样搭配，为了避免反复修改采样配置，在这里设置并切换更加方便。')}` +
+                        `</div>` +
+                        `<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">` +
+                        `<label for="${modalId}SamplingConfigSelect" style="white-space:nowrap;">${t('modal.model_detail.sampling.config', '启动配置')}</label>` +
+                        `<select class="form-control" id="${modalId}SamplingConfigSelect" style="max-width:320px;"></select>` +
+                        `</div>` +
+                        `<pre id="${modalId}SamplingPreview" style="min-height:46px; max-height:120px; overflow:auto; font-size:13px; background:#111827; color:#e5e7eb; padding:10px; border-radius:0.75rem; margin-bottom:10px;"></pre>` +
+                        `<div id="${modalId}SamplingDetails" style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;"></div>` +
+                        `</div>`;
     let propsPanel = `<div id="${modalId}PropsPanel" style="display:none; height:100%;">` +
                        `<div style="display:flex; gap:8px; margin-bottom:8px;">` +
                        `<button class="btn btn-primary" id="${modalId}PropsFetchBtn">${t('modal.model_detail.props.fetch', '请求 props')}</button>` +
@@ -76,14 +81,14 @@ function showModelDetailModal(model) {
                     `</div>`;
     let bodyEnd = `</div>`;
     let wrapperEnd = `</div>`;
-    content.innerHTML = wrapperStart + tabs + bodyStart + infoPanel + metricsPanel + propsPanel + chatTemplatePanel + tokenPanel + bodyEnd + wrapperEnd;
+    content.innerHTML = wrapperStart + tabs + bodyStart + infoPanel + samplingPanel + propsPanel + chatTemplatePanel + tokenPanel + bodyEnd + wrapperEnd;
     modal.classList.add('show');
     const tabInfo = document.getElementById(modalId + 'TabInfo');
-    const tabMetrics = document.getElementById(modalId + 'TabMetrics');
+    const tabSampling = document.getElementById(modalId + 'TabSampling');
     const tabProps = document.getElementById(modalId + 'TabProps');
     const tabChatTemplate = document.getElementById(modalId + 'TabChatTemplate');
     const tabToken = document.getElementById(modalId + 'TabToken');
-    const fetchBtn = document.getElementById(modalId + 'MetricsFetchBtn');
+    const samplingConfigSelect = document.getElementById(modalId + 'SamplingConfigSelect');
     const fetchPropsBtn = document.getElementById(modalId + 'PropsFetchBtn');
     const tplReloadBtn = document.getElementById(modalId + 'ChatTemplateReloadBtn');
     const tplDefaultBtn = document.getElementById(modalId + 'ChatTemplateDefaultBtn');
@@ -92,11 +97,11 @@ function showModelDetailModal(model) {
     const tokenCalcBtn = document.getElementById(modalId + 'TokenCalcBtn');
     const tokenInputEl = document.getElementById(modalId + 'TokenInput');
     if (tabInfo) tabInfo.onclick = () => openModelDetailTab('info');
-    if (tabMetrics) tabMetrics.onclick = () => { openModelDetailTab('metrics'); loadModelMetrics(); };
+    if (tabSampling) tabSampling.onclick = () => { openModelDetailTab('sampling'); loadModelSamplingSettings(); };
     if (tabProps) tabProps.onclick = () => { openModelDetailTab('props'); loadModelProps(); };
     if (tabChatTemplate) tabChatTemplate.onclick = () => { openModelDetailTab('chatTemplate'); loadModelChatTemplate(false); };
     if (tabToken) tabToken.onclick = () => openModelDetailTab('token');
-    if (fetchBtn) fetchBtn.onclick = () => loadModelMetrics();
+    if (samplingConfigSelect) samplingConfigSelect.onchange = () => renderSelectedModelSamplingSettings();
     if (fetchPropsBtn) fetchPropsBtn.onclick = () => loadModelProps();
     if (tplReloadBtn) tplReloadBtn.onclick = () => loadModelChatTemplate(true);
     if (tplDefaultBtn) tplDefaultBtn.onclick = () => loadModelDefaultChatTemplate();
@@ -118,17 +123,17 @@ function showModelDetailModal(model) {
 function openModelDetailTab(tab) {
     const modalId = 'modelDetailModal';
     const info = document.getElementById(modalId + 'InfoPanel');
-    const metrics = document.getElementById(modalId + 'MetricsPanel');
+    const sampling = document.getElementById(modalId + 'SamplingPanel');
     const props = document.getElementById(modalId + 'PropsPanel');
     const chatTemplate = document.getElementById(modalId + 'ChatTemplatePanel');
     const token = document.getElementById(modalId + 'TokenPanel');
     const btnInfo = document.getElementById(modalId + 'TabInfo');
-    const btnMetrics = document.getElementById(modalId + 'TabMetrics');
+    const btnSampling = document.getElementById(modalId + 'TabSampling');
     const btnProps = document.getElementById(modalId + 'TabProps');
     const btnChatTemplate = document.getElementById(modalId + 'TabChatTemplate');
     const btnToken = document.getElementById(modalId + 'TabToken');
     if (info) info.style.display = tab === 'info' ? '' : 'none';
-    if (metrics) metrics.style.display = tab === 'metrics' ? '' : 'none';
+    if (sampling) sampling.style.display = tab === 'sampling' ? '' : 'none';
     if (props) props.style.display = tab === 'props' ? '' : 'none';
     if (chatTemplate) chatTemplate.style.display = tab === 'chatTemplate' ? '' : 'none';
     if (token) token.style.display = tab === 'token' ? '' : 'none';
@@ -139,27 +144,10 @@ function openModelDetailTab(tab) {
         btn.classList.add(active ? 'btn-primary' : 'btn-secondary');
     };
     applyTabBtnStyle(btnInfo, tab === 'info');
-    applyTabBtnStyle(btnMetrics, tab === 'metrics');
+    applyTabBtnStyle(btnSampling, tab === 'sampling');
     applyTabBtnStyle(btnProps, tab === 'props');
     applyTabBtnStyle(btnChatTemplate, tab === 'chatTemplate');
     applyTabBtnStyle(btnToken, tab === 'token');
-}
-
-function loadModelMetrics() {
-    const modelId = window.__modelDetailModelId;
-    const viewer = document.getElementById('modelDetailModalMetricsViewer');
-    if (!modelId || !viewer) return;
-    viewer.textContent = t('common.loading', '加载中...');
-    fetch('/api/models/metrics?modelId=' + encodeURIComponent(modelId))
-        .then(r => r.json())
-        .then(res => {
-            const d = res && res.success ? res.data : null;
-            const metrics = d && d.metrics ? d.metrics : null;
-            viewer.textContent = metrics ? JSON.stringify(metrics, null, 2) : JSON.stringify(res, null, 2);
-        })
-        .catch(() => {
-            viewer.textContent = t('common.request_failed', '请求失败');
-        });
 }
 
 function loadModelProps() {
@@ -189,6 +177,168 @@ function extractModelConfigFromGetResponse(res, modelId) {
         if (direct && typeof direct === 'object') return direct;
     }
     return {};
+}
+
+function normalizeModelConfigBundle(rawEntry) {
+    if (!rawEntry || typeof rawEntry !== 'object') {
+        return {
+            selectedConfig: '',
+            configs: {}
+        };
+    }
+    if (rawEntry.configs && typeof rawEntry.configs === 'object' && !Array.isArray(rawEntry.configs)) {
+        const configs = {};
+        const names = Object.keys(rawEntry.configs);
+        for (let i = 0; i < names.length; i++) {
+            const name = names[i];
+            const cfg = rawEntry.configs[name];
+            configs[name] = cfg && typeof cfg === 'object' && !Array.isArray(cfg) ? cfg : {};
+        }
+        const selectedRaw = rawEntry.selectedConfig === null || rawEntry.selectedConfig === undefined ? '' : String(rawEntry.selectedConfig).trim();
+        const selectedConfig = selectedRaw && configs[selectedRaw] ? selectedRaw : (Object.keys(configs)[0] || '');
+        return { selectedConfig, configs };
+    }
+    return {
+        selectedConfig: '默认配置',
+        configs: { '默认配置': rawEntry }
+    };
+}
+
+function extractModelConfigBundleFromGetResponse(res, modelId) {
+    if (!(res && res.success)) return normalizeModelConfigBundle(null);
+    const data = res.data;
+    if (!data || typeof data !== 'object') return normalizeModelConfigBundle(null);
+    if (data.configs && typeof data.configs === 'object') return normalizeModelConfigBundle(data);
+    const direct = data[modelId];
+    return normalizeModelConfigBundle(direct);
+}
+
+function parseCommandArgs(command) {
+    const text = command === null || command === undefined ? '' : String(command);
+    if (!text.trim()) return [];
+    const args = [];
+    const re = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|[^\s]+/g;
+    let match;
+    while ((match = re.exec(text)) !== null) {
+        if (match[1] !== undefined) args.push(match[1]);
+        else if (match[2] !== undefined) args.push(match[2]);
+        else args.push(match[0]);
+    }
+    return args;
+}
+
+function extractSamplingSettingsFromConfig(cfg) {
+    const config = cfg && typeof cfg === 'object' ? cfg : {};
+    const out = {
+        temp: null,
+        topP: null,
+        topK: null,
+        minP: null,
+        presencePenalty: null,
+        repeatPenalty: null,
+        frequencyPenalty: null
+    };
+    const readValue = (keys) => {
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            if (Object.prototype.hasOwnProperty.call(config, key) && config[key] !== null && config[key] !== undefined && String(config[key]).trim() !== '') {
+                return config[key];
+            }
+        }
+        return null;
+    };
+    out.temp = readValue(['temp', 'temperature']);
+    out.topP = readValue(['topP', 'top_p', 'top-p']);
+    out.topK = readValue(['topK', 'top_k', 'top-k']);
+    out.minP = readValue(['minP', 'min_p', 'min-p']);
+    out.presencePenalty = readValue(['presencePenalty', 'presence_penalty', 'presence-penalty']);
+    out.repeatPenalty = readValue(['repeatPenalty', 'repeat_penalty', 'repeat-penalty']);
+    out.frequencyPenalty = readValue(['frequencyPenalty', 'frequency_penalty', 'frequency-penalty']);
+
+    const args = parseCommandArgs(config.cmd);
+    const flagMap = {
+        '--temp': 'temp',
+        '--top-p': 'topP',
+        '--top-k': 'topK',
+        '--min-p': 'minP',
+        '--presence-penalty': 'presencePenalty',
+        '--repeat-penalty': 'repeatPenalty',
+        '--frequency-penalty': 'frequencyPenalty'
+    };
+    for (let i = 0; i < args.length; i++) {
+        const token = args[i];
+        if (!token || token[0] !== '-') continue;
+        const eq = token.indexOf('=');
+        let key = token;
+        let val = null;
+        if (eq > -1) {
+            key = token.slice(0, eq);
+            val = token.slice(eq + 1);
+        } else if (i + 1 < args.length) {
+            val = args[i + 1];
+        }
+        if (val !== null && val !== undefined && String(val).startsWith('--')) continue;
+        const target = flagMap[key];
+        if (!target || out[target] !== null || val === null || val === undefined || String(val).trim() === '') continue;
+        out[target] = val;
+    }
+    return out;
+}
+
+function renderSelectedModelSamplingSettings() {
+    const modalId = 'modelDetailModal';
+    const select = document.getElementById(modalId + 'SamplingConfigSelect');
+    const preview = document.getElementById(modalId + 'SamplingPreview');
+    const details = document.getElementById(modalId + 'SamplingDetails');
+    const bundle = window.__modelDetailSamplingBundle;
+    if (!select || !preview || !details || !bundle || !bundle.configs) return;
+    const name = select.value || bundle.selectedConfig || '';
+    const cfg = bundle.configs[name] || {};
+    const s = extractSamplingSettingsFromConfig(cfg);
+    const fmt = (v) => (v === null || v === undefined || String(v).trim() === '') ? '-' : String(v);
+    const safe = (v) => escapeAttrCompat(v === null || v === undefined ? '' : String(v));
+    preview.textContent = `--temp ${fmt(s.temp)} --top-p ${fmt(s.topP)} --top-k ${fmt(s.topK)} --min-p ${fmt(s.minP)} --presence-penalty ${fmt(s.presencePenalty)} --repeat-penalty ${fmt(s.repeatPenalty)} --frequency-penalty ${fmt(s.frequencyPenalty)}`;
+    details.innerHTML = [
+        ['温度', '--temp', s.temp],
+        ['Top-P', '--top-p', s.topP],
+        ['Top-K', '--top-k', s.topK],
+        ['Min-P', '--min-p', s.minP],
+        ['Presence Penalty', '--presence-penalty', s.presencePenalty],
+        ['Repeat Penalty', '--repeat-penalty', s.repeatPenalty],
+        ['Frequency Penalty', '--frequency-penalty', s.frequencyPenalty]
+    ].map((item) => `<div style="padding:8px 10px; border:1px solid #e5e7eb; border-radius:0.75rem;"><div style="font-size:12px; color:#6b7280;">${safe(item[0])} ${safe(item[1])}</div><div style="font-weight:600; color:#111827; margin-top:4px;">${safe(fmt(item[2]))}</div></div>`).join('');
+}
+
+function loadModelSamplingSettings() {
+    const modelId = window.__modelDetailModelId;
+    const modalId = 'modelDetailModal';
+    const select = document.getElementById(modalId + 'SamplingConfigSelect');
+    const preview = document.getElementById(modalId + 'SamplingPreview');
+    if (!modelId || !select || !preview) return;
+    preview.textContent = t('common.loading', '加载中...');
+    fetch(`/api/models/config/get?modelId=${encodeURIComponent(modelId)}`)
+        .then(r => r.json())
+        .then(res => {
+            if (!(res && res.success)) {
+                preview.textContent = t('common.request_failed', '请求失败');
+                return;
+            }
+            const bundle = extractModelConfigBundleFromGetResponse(res, modelId);
+            window.__modelDetailSamplingBundle = bundle;
+            const names = Object.keys(bundle.configs || {});
+            if (!names.length) {
+                select.innerHTML = '<option value="">默认配置</option>';
+                select.value = '';
+                renderSelectedModelSamplingSettings();
+                return;
+            }
+            select.innerHTML = names.map((name) => `<option value="${escapeAttrCompat(name)}">${escapeAttrCompat(name)}</option>`).join('');
+            select.value = (bundle.selectedConfig && bundle.configs[bundle.selectedConfig]) ? bundle.selectedConfig : names[0];
+            renderSelectedModelSamplingSettings();
+        })
+        .catch(() => {
+            preview.textContent = t('common.request_failed', '请求失败');
+        });
 }
 
 function loadModelChatTemplate(showEmptyTip = false) {
