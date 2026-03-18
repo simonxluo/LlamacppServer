@@ -1016,7 +1016,7 @@ async function regenerateMessage(messageId) {
     }
 
     msg.reasoning = '';
-    msg.uiContent = '';
+    delete msg.uiContent;
     delete msg.timings;
     state.timingsLog = (Array.isArray(state.timingsLog) ? state.timingsLog : []).filter(it => String(it?.messageId || '') !== String(msg.id));
 
