@@ -17,6 +17,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 
 
@@ -70,7 +71,19 @@ public class LMStudioRouterHandler extends SimpleChannelInboundHandler<FullHttpR
 			return;
 		}
 		String uri = request.uri();
-		logger.info("收到请求: {} {}", request.method().name(), uri);
+		// 这里是日志专区
+		// 1.
+		if(LlamaServer.logRequestUrl) {
+			logger.info("DEBUG - LM Studio - 收到请求：{}", uri);	
+		}
+		// 2.
+		if(LlamaServer.logRequestHeader) {
+			logger.info("DEBUG - LM Studio - 请求头：{}", request.headers());
+		}
+		// 3.
+		if(LlamaServer.logRequestBody) {
+			logger.info("DEBUG - LM Studio - 请求体：{}", request.content().toString(CharsetUtil.UTF_8));
+		}
 		// 傻逼浏览器不知道为什么一直在他妈的访问/.well-known/appspecific/com.chrome.devtools.json
 		if ("/.well-known/appspecific/com.chrome.devtools.json".equals(uri)) {
 			ctx.close();
