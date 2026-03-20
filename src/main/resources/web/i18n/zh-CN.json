@@ -702,6 +702,7 @@
   "page.benchmark_v2.label.prompt_tokens": "提示词长度",
   "page.benchmark_v2.label.max_tokens": "输出最大token",
   "page.benchmark_v2.action.run": "开始测试",
+  "page.benchmark_v2.action.cancel": "取消测试",
   "page.benchmark_v2.action.refresh_models": "刷新模型",
   "page.benchmark_v2.section.all_models": "全部模型",
   "page.benchmark_v2.section.records": "测试记录",

@@ -219,6 +219,35 @@
       text-align: left;
       white-space: nowrap;
     }
+    .result-table tr.record-main td {
+      border-top: 2px solid rgba(99, 102, 241, 0.65);
+      background: rgba(99, 102, 241, 0.06);
+    }
+    .result-table tr.record-detail td {
+      white-space: normal;
+      word-break: break-word;
+      font-size: 11px;
+      color: black;
+      border-top: 0;
+      padding-top: 4px;
+      padding-bottom: 6px;
+      font-size: 12px;
+    }
+    .result-table tr.record-path td {
+      border-top: 0;
+      border-bottom: 2px solid rgba(99, 102, 241, 0.65);
+      padding-top: 5px;
+      padding-bottom: 8px;
+      color: black;
+      font-size: 12px;
+    }
+    .result-table .path-row td {
+      white-space: normal;
+      word-break: break-all;
+      background: rgba(255, 255, 255, 0.03);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
     .result-table th {
       background: var(--sidebar-bg);
       color: var(--text-secondary);
@@ -272,6 +301,10 @@
             <label for="maxTokensInput" data-i18n="page.benchmark_v2.label.max_tokens">输出最大token</label>
             <input id="maxTokensInput" type="number" class="form-control" value="256" min="1" />
           </div>
+          <div class="row">
+            <label for="concurrencyInput" data-i18n="page.benchmark_v2.label.concurrency">并发次数</label>
+            <input id="concurrencyInput" type="number" class="form-control" value="1" min="1" step="1" />
+          </div>
           <div class="actions">
             <button id="runBtn" class="btn btn-primary" data-i18n="page.benchmark_v2.action.run">开始测试</button>
             <button id="refreshBtn" class="btn" data-i18n="page.benchmark_v2.action.refresh_models">刷新模型</button>
@@ -296,7 +329,6 @@
                 <tr>
                   <th data-i18n="page.benchmark_v2.table.time">时间</th>
                   <th data-i18n="page.benchmark_v2.table.model">模型</th>
-                  <th data-i18n="page.benchmark_v2.table.llamacpp">llama.cpp</th>
                   <th data-i18n="page.benchmark_v2.table.prompt_tokens">提示词长度</th>
                   <th data-i18n="page.benchmark_v2.table.prefill_speed">预填充速度（token/s）</th>
                   <th data-i18n="page.benchmark_v2.table.output_tokens">输出长度</th>
@@ -305,7 +337,7 @@
               </thead>
               <tbody id="resultBody">
                 <tr id="emptyRow">
-                  <td class="empty" colspan="7" data-i18n="page.benchmark_v2.empty.no_records">暂无记录</td>
+                  <td class="empty" colspan="6" data-i18n="page.benchmark_v2.empty.no_records">暂无记录</td>
                 </tr>
               </tbody>
             </table>
@@ -320,6 +352,7 @@
       modelSelect: document.getElementById('modelSelect'),
       promptTokens: document.getElementById('promptTokensInput'),
       maxTokens: document.getElementById('maxTokensInput'),
+      concurrency: document.getElementById('concurrencyInput'),
       runBtn: document.getElementById('runBtn'),
       refreshBtn: document.getElementById('refreshBtn'),
       allModelsList: document.getElementById('allModelsList'),
@@ -336,6 +369,7 @@
     let currentRecordKeys = new Set();
     let benchmarkAbortController = null;
     let isBenchmarkRunning = false;
+    let benchmarkHardwareByModel = new Map();
 
     function t(key, fallback) {
       if (window.I18N && typeof window.I18N.t === 'function') {
@@ -508,53 +542,147 @@
       tr.id = 'emptyRow';
       const td = document.createElement('td');
       td.className = 'empty';
-      td.colSpan = 7;
+      td.colSpan = 6;
       td.textContent = message || t('page.benchmark_v2.empty.no_records', '暂无记录');
       tr.appendChild(td);
       els.resultBody.appendChild(tr);
     }
 
-    function appendRow(rowValues) {
-      if (!els.resultBody) return;
-      const emptyRow = document.getElementById('emptyRow');
-      if (emptyRow) emptyRow.remove();
-      const tr = document.createElement('tr');
-      for (const v of rowValues) {
-        const td = document.createElement('td');
-        td.textContent = v == null || v === '' ? '-' : String(v);
-        tr.appendChild(td);
+    function cloneDevices(value) {
+      if (Array.isArray(value)) {
+        return value.map(v => safeText(v).trim()).filter(Boolean);
       }
-      els.resultBody.appendChild(tr);
+      const text = safeText(value).trim();
+      return text ? [text] : [];
     }
 
-    function prependRow(rowValues) {
+    function saveHardwareProfile(source, fallbackModelId) {
+      const modelId = safeText(source && source.modelId ? source.modelId : fallbackModelId).trim();
+      if (!modelId) return;
+      const cpu = safeText(source && source.cpu).trim();
+      const ramRaw = source && source.ram != null ? String(source.ram).trim() : '';
+      const devices = cloneDevices(source && source.devices);
+      const llamaBinPath = safeText(source && source.llamaBinPath).trim();
+      const cmd = safeText(source && source.cmd).trim();
+      const prev = benchmarkHardwareByModel.get(modelId) || {};
+      const next = {
+        cpu: cpu || safeText(prev.cpu).trim(),
+        ram: ramRaw || safeText(prev.ram).trim(),
+        devices: devices.length ? devices : cloneDevices(prev.devices),
+        llamaBinPath: llamaBinPath || safeText(prev.llamaBinPath).trim(),
+        cmd: cmd || safeText(prev.cmd).trim()
+      };
+      benchmarkHardwareByModel.set(modelId, next);
+    }
+
+    function withHardwareFallback(record, fallbackModelId) {
+      const out = record && typeof record === 'object' ? { ...record } : {};
+      const modelId = safeText(out.modelId ? out.modelId : fallbackModelId).trim();
+      const profile = modelId ? benchmarkHardwareByModel.get(modelId) : null;
+      if (!profile) return out;
+      if (!safeText(out.cpu).trim() && safeText(profile.cpu).trim()) out.cpu = profile.cpu;
+      if ((out.ram == null || String(out.ram).trim() === '') && safeText(profile.ram).trim()) out.ram = profile.ram;
+      const outDevices = cloneDevices(out.devices);
+      if (!outDevices.length) {
+        const profileDevices = cloneDevices(profile.devices);
+        if (profileDevices.length) out.devices = profileDevices;
+      }
+      if (!safeText(out.llamaBinPath).trim() && safeText(profile.llamaBinPath).trim()) out.llamaBinPath = profile.llamaBinPath;
+      if (!safeText(out.cmd).trim() && safeText(profile.cmd).trim()) out.cmd = profile.cmd;
+      return out;
+    }
+
+    function formatCpuRam(record) {
+      const cpu = safeText(record && record.cpu).trim();
+      const ram = safeText(record && record.ram).trim();
+      if (cpu && ram) return `${cpu} / ${ram}GB`;
+      if (cpu) return cpu;
+      if (ram) return `${ram}GB`;
+      return '-';
+    }
+
+    function formatDevices(record) {
+      const raw = record ? record.devices : null;
+      if (Array.isArray(raw)) {
+        const list = raw.map(v => safeText(v).trim()).filter(Boolean);
+        return list.length ? list.join(' | ') : '-';
+      }
+      if (raw == null) return '-';
+      const text = safeText(raw).trim();
+      return text || '-';
+    }
+
+    function createRecordRows(record, fallbackModelId) {
+      const values = normalizeRecordRow(record, fallbackModelId);
+      const dataRow = document.createElement('tr');
+      dataRow.className = 'record-main';
+      for (const v of values.main) {
+        const td = document.createElement('td');
+        td.textContent = v == null || v === '' ? '-' : String(v);
+        dataRow.appendChild(td);
+      }
+      const buildDetailRow = (text, extraClass) => {
+        const row = document.createElement('tr');
+        row.className = `record-detail ${extraClass || ''}`.trim();
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.textContent = text;
+        row.appendChild(td);
+        return row;
+      };
+      const cpuRamRow = buildDetailRow(values.cpuRam);
+      const gpuRow = buildDetailRow(values.gpu);
+      const cmdRow = buildDetailRow(values.cmd);
+      const pathRow = buildDetailRow(values.path);
+      return { rows: [dataRow, cpuRamRow, gpuRow, cmdRow, pathRow] };
+    }
+
+    function appendRecordRow(record, fallbackModelId) {
       if (!els.resultBody) return;
       const emptyRow = document.getElementById('emptyRow');
       if (emptyRow) emptyRow.remove();
-      const tr = document.createElement('tr');
-      for (const v of rowValues) {
-        const td = document.createElement('td');
-        td.textContent = v == null || v === '' ? '-' : String(v);
-        tr.appendChild(td);
+      const group = createRecordRows(record, fallbackModelId);
+      for (const row of group.rows) {
+        els.resultBody.appendChild(row);
       }
+    }
+
+    function prependRecordRow(record, fallbackModelId) {
+      if (!els.resultBody) return;
+      const emptyRow = document.getElementById('emptyRow');
+      if (emptyRow) emptyRow.remove();
+      const group = createRecordRows(record, fallbackModelId);
       const first = els.resultBody.firstChild;
-      if (first) els.resultBody.insertBefore(tr, first);
-      else els.resultBody.appendChild(tr);
+      if (first) {
+        for (let i = group.rows.length - 1; i >= 0; i--) {
+          els.resultBody.insertBefore(group.rows[i], first);
+        }
+      } else {
+        for (const row of group.rows) {
+          els.resultBody.appendChild(row);
+        }
+      }
     }
 
     function normalizeRecordRow(record, fallbackModelId) {
-      const timings = record && record.timings ? record.timings : null;
-      const promptTokens = record && record.promptTokens != null ? record.promptTokens : (timings ? timings.prompt_n : null);
-      const outputTokens = timings && timings.predicted_n != null ? timings.predicted_n : (record ? record.maxTokens : null);
-      return [
-        formatTimestamp(record && record.timestamp ? record.timestamp : null),
-        (record && record.modelId) ? record.modelId : (fallbackModelId || '-'),
-        record && record.llamaBinPath ? record.llamaBinPath : '-',
-        promptTokens != null ? promptTokens : '-',
-        formatNumber(timings && timings.prompt_per_second != null ? timings.prompt_per_second : null),
-        outputTokens != null ? outputTokens : '-',
-        formatNumber(timings && timings.predicted_per_second != null ? timings.predicted_per_second : null)
-      ];
+      const merged = withHardwareFallback(record, fallbackModelId);
+      const timings = merged && merged.timings ? merged.timings : null;
+      const promptTokens = merged && merged.promptTokens != null ? merged.promptTokens : (timings ? timings.prompt_n : null);
+      const outputTokens = timings && timings.predicted_n != null ? timings.predicted_n : (merged ? merged.maxTokens : null);
+      return {
+        main: [
+          formatTimestamp(merged && merged.timestamp ? merged.timestamp : null),
+          (merged && merged.modelId) ? merged.modelId : (fallbackModelId || '-'),
+          promptTokens != null ? promptTokens : '-',
+          formatNumber(timings && timings.prompt_per_second != null ? timings.prompt_per_second : null),
+          outputTokens != null ? outputTokens : '-',
+          formatNumber(timings && timings.predicted_per_second != null ? timings.predicted_per_second : null)
+        ],
+        cpuRam: formatCpuRam(merged),
+        gpu: formatDevices(merged),
+        cmd: merged && merged.cmd ? String(merged.cmd) : '',
+        path: merged && merged.llamaBinPath ? String(merged.llamaBinPath) : ''
+      };
     }
 
     function recordKey(record, fallbackModelId) {
@@ -693,7 +821,8 @@
           clearResultRows('');
           currentRecordKeys = new Set();
           for (const r of sorted) {
-            appendRow(normalizeRecordRow(r, id));
+            saveHardwareProfile(r, id);
+            appendRecordRow(r, id);
             currentRecordKeys.add(recordKey(r, id));
           }
           setStatus(tf('page.benchmark_v2.status.records_loaded', { count: sorted.length }, `已加载 ${sorted.length} 条记录`));
@@ -717,7 +846,8 @@
           return ta.localeCompare(tb);
         });
         for (const r of asc) {
-          prependRow(normalizeRecordRow(r, id));
+          saveHardwareProfile(r, id);
+          prependRecordRow(r, id);
           currentRecordKeys.add(recordKey(r, id));
         }
         setStatus(tf('page.benchmark_v2.status.records_appended', { count: asc.length }, `已追加 ${asc.length} 条记录`));
@@ -735,6 +865,8 @@
       const modelId = (els.modelSelect.value || '').trim();
       const promptTokens = parseInt(els.promptTokens.value, 10);
       const maxTokens = parseInt(els.maxTokens.value, 10);
+      const concurrencyRaw = parseInt(els.concurrency ? els.concurrency.value : '1', 10);
+      const concurrency = Number.isFinite(concurrencyRaw) ? concurrencyRaw : NaN;
       if (!modelId) {
         setStatus(t('page.benchmark_v2.status.select_model', '请选择模型'));
         return;
@@ -747,27 +879,81 @@
         setStatus(t('page.benchmark_v2.status.max_tokens_gt0', '输出最大token必须大于0'));
         return;
       }
+      if (!Number.isFinite(concurrency) || concurrency <= 0) {
+        setStatus(t('page.benchmark_v2.status.concurrency_gt0', '并发次数必须大于0'));
+        return;
+      }
       if (!validateTokenLimit()) {
         return;
       }
       isBenchmarkRunning = true;
       benchmarkAbortController = new AbortController();
       if (els.runBtn) els.runBtn.textContent = t('page.benchmark_v2.action.cancel', '取消测试');
-      setStatus(t('page.benchmark_v2.status.running', '执行中…'));
+      setStatus(concurrency > 1 ? tf('page.benchmark_v2.status.running_progress', { done: 0, total: concurrency }, `执行中… (0/${concurrency})`) : t('page.benchmark_v2.status.running', '执行中…'));
       try {
         const payload = {
           modelId,
           promptTokens,
           maxTokens
         };
-        const data = await fetchJson('/api/v2/models/benchmark', {
+        const requestOnce = () => fetchJson('/api/v2/models/benchmark', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
           signal: benchmarkAbortController.signal
         });
-        setStatus(data.success ? t('page.benchmark_v2.status.done', '完成') : (data.error || t('page.benchmark_v2.status.failed', '失败')));
-        if (data && data.success) {
+
+        if (concurrency === 1) {
+          const data = await requestOnce();
+          setStatus(data.success ? t('page.benchmark_v2.status.done', '完成') : (data.error || t('page.benchmark_v2.status.failed', '失败')));
+          if (data && data.success) {
+            saveHardwareProfile(data.data, modelId);
+            const mode = selectedModelId === modelId ? 'append' : 'replace';
+            selectModelForRecords(modelId, { mode });
+          }
+          return;
+        }
+
+        let doneCount = 0;
+        const tasks = Array.from({ length: concurrency }, () => requestOnce().then(
+          (data) => {
+            doneCount += 1;
+            setStatus(tf('page.benchmark_v2.status.running_progress', { done: doneCount, total: concurrency }, `执行中… (${doneCount}/${concurrency})`));
+            return data;
+          },
+          (err) => {
+            doneCount += 1;
+            setStatus(tf('page.benchmark_v2.status.running_progress', { done: doneCount, total: concurrency }, `执行中… (${doneCount}/${concurrency})`));
+            throw err;
+          }
+        ));
+
+        const results = await Promise.allSettled(tasks);
+        if (benchmarkAbortController && benchmarkAbortController.signal && benchmarkAbortController.signal.aborted) {
+          setStatus(t('page.benchmark_v2.status.cancelled', '已取消'));
+          return;
+        }
+
+        let okCount = 0;
+        let failCount = 0;
+        for (const r of results) {
+          if (r && r.status === 'fulfilled') {
+            if (r.value && r.value.success === true) {
+              okCount += 1;
+              saveHardwareProfile(r.value.data, modelId);
+            } else failCount += 1;
+          } else {
+            failCount += 1;
+          }
+        }
+
+        if (failCount === 0) {
+          setStatus(t('page.benchmark_v2.status.done', '完成'));
+        } else {
+          setStatus(tf('page.benchmark_v2.status.concurrent_done', { ok: okCount, total: concurrency, fail: failCount }, `完成 ${okCount}/${concurrency}，失败 ${failCount}`));
+        }
+
+        if (okCount > 0) {
           const mode = selectedModelId === modelId ? 'append' : 'replace';
           selectModelForRecords(modelId, { mode });
         }

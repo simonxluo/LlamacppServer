@@ -702,6 +702,7 @@
   "page.benchmark_v2.label.prompt_tokens": "Prompt tokens",
   "page.benchmark_v2.label.max_tokens": "Max output tokens",
   "page.benchmark_v2.action.run": "Run benchmark",
+  "page.benchmark_v2.action.cancel": "Cancel",
   "page.benchmark_v2.action.refresh_models": "Refresh",
   "page.benchmark_v2.section.all_models": "All models",
   "page.benchmark_v2.section.records": "Records",
