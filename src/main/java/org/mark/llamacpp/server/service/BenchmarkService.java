@@ -30,7 +30,7 @@ import io.netty.channel.ChannelHandlerContext;
 
 
 /**
- * 	性能测试 V2，直接通过/v1/chat/completions发送提示词来测试性能。
+ * 	性能测试 V2，通过llama.cpp原生/completion接口发送提示词来测试性能。
  */
 public class BenchmarkService {
 	
@@ -100,19 +100,16 @@ public class BenchmarkService {
 
 			JsonArray messages = normalizeMessages(json.get("messages"));
 			JsonObject bench = generatePromptForTargetTokens(modelId, messages, promptTokens.intValue() - 1);
-			String contentText = bench != null && bench.has("content") && !bench.get("content").isJsonNull()
-					? bench.get("content").getAsString()
+			String prompt = bench != null && bench.has("prompt") && !bench.get("prompt").isJsonNull()
+					? bench.get("prompt").getAsString()
 					: "";
-			JsonObject userMsg = ensureUserMessage(messages);
-			userMsg.addProperty("content", contentText);
 
 			JsonObject forward = new JsonObject();
-			forward.addProperty("model", modelId);
-			forward.add("messages", messages);
-			forward.addProperty("max_tokens", maxTokens.intValue());
+			forward.addProperty("prompt", prompt);
+			forward.addProperty("n_predict", maxTokens.intValue());
 			forward.addProperty("stream", false);
 
-			String targetUrl = String.format("http://localhost:%d/v1/chat/completions", port.intValue());
+			String targetUrl = String.format("http://localhost:%d/completion", port.intValue());
 			URL url = URI.create(targetUrl).toURL();
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("POST");
@@ -396,6 +393,11 @@ public class BenchmarkService {
 				throw new IllegalStateException("未找到模型端口: " + modelId);
 			}
 			String targetUrl = String.format("http://localhost:%d%s", port.intValue(), path);
+			String jsonToSend = JsonUtil.toJson(payload);
+			logger.info("BenchmarkService 发送请求: path={}, JSON长度={}, JSON预览={}",
+				path, jsonToSend.length(),
+				jsonToSend.length() > 200 ? jsonToSend.substring(0, 200) + "..." : jsonToSend);
+
 			URL url = URI.create(targetUrl).toURL();
 			connection = (HttpURLConnection) url.openConnection();
 			connection.setRequestMethod("POST");
@@ -403,7 +405,7 @@ public class BenchmarkService {
 			connection.setConnectTimeout(30000);
 			connection.setReadTimeout(30000);
 			connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-			byte[] outBytes = JsonUtil.toJson(payload).getBytes(StandardCharsets.UTF_8);
+			byte[] outBytes = jsonToSend.getBytes(StandardCharsets.UTF_8);
 			connection.setRequestProperty("Content-Length", String.valueOf(outBytes.length));
 			try (OutputStream os = connection.getOutputStream()) {
 				os.write(outBytes);
