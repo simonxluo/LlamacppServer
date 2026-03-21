@@ -922,22 +922,22 @@ public class SystemController implements BaseController {
 			}
 
 			List<String> devices = LlamaServerManager.getInstance().handleListDevices(llamaBinPath);
-
-			String executableName = "llama-bench";
-			// 拼接完整命令路径
-			String command = llamaBinPath.trim();
-			command += File.separator;
-
-			command += executableName + " --list-devices";
-
-			// 执行命令
-			CommandLineRunner.CommandResult result = CommandLineRunner.execute(command, 30);
+//
+//			String executableName = "llama-bench";
+//			// 拼接完整命令路径
+//			String command = llamaBinPath.trim();
+//			command += File.separator;
+//
+//			command += executableName + " --list-devices";
+//
+//			// 执行命令
+//			CommandLineRunner.CommandResult result = CommandLineRunner.execute(command, 30);
 			// 构建响应数据
 			Map<String, Object> data = new HashMap<>();
-			data.put("command", command);
-			data.put("exitCode", result.getExitCode());
-			data.put("output", result.getOutput());
-			data.put("error", result.getError());
+			//data.put("command", command);
+			//data.put("exitCode", result.getExitCode());
+			//data.put("output", result.getOutput());
+			//data.put("error", result.getError());
 			data.put("devices", devices);
 
 			LlamaServer.sendJsonResponse(ctx, ApiResponse.success(data));

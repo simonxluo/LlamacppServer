@@ -11,10 +11,16 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.mark.llamacpp.server.LlamaCppProcess;
 import org.mark.llamacpp.server.LlamaServerManager;
@@ -43,6 +49,7 @@ public class BenchmarkService {
 		public int sampleCount = 64;
 		public boolean addSpecial = true;
 		public boolean parseSpecial = true;
+		public int maxUnitsPerMessage = 0;
 	}
 	
 	private static class PromptTokenResult {
@@ -66,7 +73,12 @@ public class BenchmarkService {
 		
 	}
 	
-
+	/**
+	 * 	处理benchmark的请求。
+	 * @param ctx
+	 * @param json
+	 * @return
+	 */
 	public Map<String, Object> handleBenchmark(ChannelHandlerContext ctx, JsonObject json) {
 		HttpURLConnection connection = null;
 		try {
@@ -86,7 +98,7 @@ public class BenchmarkService {
 			if (maxTokens == null || maxTokens.intValue() <= 0) {
 				throw new IllegalArgumentException("缺少必需的maxTokens参数");
 			}
-
+			
 			LlamaServerManager manager = LlamaServerManager.getInstance();
 			if (!manager.getLoadedProcesses().containsKey(modelId)) {
 				throw new IllegalStateException("模型未加载: " + modelId);
@@ -97,17 +109,22 @@ public class BenchmarkService {
 			}
 			LlamaCppProcess process = manager.getLoadedProcesses().get(modelId);
 			final String llamaBinPath = process == null ? null : process.getLlamaBinPath();
+			// 查找启动参数中，是否包含--device参数，如果有，则要单独列出来
+			List<String> deviceList = this.findDevicesInUse(process);
 
-			JsonArray messages = normalizeMessages(json.get("messages"));
-			JsonObject bench = generatePromptForTargetTokens(modelId, messages, promptTokens.intValue() - 1);
+			BenchmarkTokenOptions options = new BenchmarkTokenOptions();
+			if (promptTokens.intValue() >= 8192) {
+				options.maxUnitsPerMessage = 4096;
+			}
+			JsonObject bench = this.generatePromptForTargetTokens(modelId, null, promptTokens.intValue() - 1, options);
 			String prompt = bench != null && bench.has("prompt") && !bench.get("prompt").isJsonNull()
 					? bench.get("prompt").getAsString()
 					: "";
-
 			JsonObject forward = new JsonObject();
 			forward.addProperty("prompt", prompt);
 			forward.addProperty("n_predict", maxTokens.intValue());
 			forward.addProperty("stream", false);
+			
 
 			String targetUrl = String.format("http://localhost:%d/completion", port.intValue());
 			URL url = URI.create(targetUrl).toURL();
@@ -142,32 +159,22 @@ public class BenchmarkService {
 			}
 
 			Map<String, Object> data = new HashMap<>();
+			String cpu = ComputerService.getCPUModel();
+			Long ram = this.toGbFromKb(ComputerService.getPhysicalMemoryKB());
+			String cmd = process == null ? null : process.getCmd();
 			data.put("modelId", modelId);
 			data.put("promptTokens", promptTokens);
 			data.put("maxTokens", maxTokens);
 			data.put("timings", JsonUtil.fromJson(timingsObj, Object.class));
+			data.put("devices", deviceList);
+			data.put("cpu", cpu);
+			data.put("ram", ram);
+			data.put("cmd", cmd);
 			data.put("llamaBinPath", llamaBinPath);
 
 			try {
-				String safeModelId = modelId.replaceAll("[^a-zA-Z0-9-_\\.]", "_");
-				String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-				String fileName = safeModelId + "_V2.jsonl";
-				File dir = new File("benchmarks");
-				if (!dir.exists()) {
-					dir.mkdirs();
-				}
-				File outFile = new File(dir, fileName);
-				try (FileOutputStream fos = new FileOutputStream(outFile, true)) {
-					JsonObject record = new JsonObject();
-					record.addProperty("timestamp", timestamp);
-					record.addProperty("modelId", modelId);
-					record.addProperty("promptTokens", promptTokens);
-					record.addProperty("maxTokens", maxTokens);
-					record.addProperty("llamaBinPath", llamaBinPath);
-					record.add("timings", timingsObj);
-					String line = JsonUtil.toJson(record) + System.lineSeparator();
-					fos.write(line.getBytes(StandardCharsets.UTF_8));
-				}
+				File outFile = this.saveBenchmarkV2Record(modelId, promptTokens.intValue(), maxTokens.intValue(),
+						llamaBinPath, timingsObj, deviceList, cpu, ram, cmd);
 				data.put("savedPath", outFile.getAbsolutePath());
 			} catch (Exception ex) {
 				logger.info("保存基准测试V2结果到文件失败", ex);
@@ -190,6 +197,85 @@ public class BenchmarkService {
 				} catch (Exception ignore) {
 				}
 			}
+		}
+	}
+
+	private File saveBenchmarkV2Record(String modelId, int promptTokens, int maxTokens, String llamaBinPath,
+			JsonObject timingsObj, List<String> deviceList, String cpu, Long ram, String cmd) throws Exception {
+		String safeModelId = (modelId == null ? "unknown" : modelId).replaceAll("[^a-zA-Z0-9-_\\.]", "_");
+		String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+		String fileName = safeModelId + "_V2.jsonl";
+		File dir = new File("benchmarks");
+		if (!dir.exists()) {
+			dir.mkdirs();
+		}
+		File outFile = new File(dir, fileName);
+		JsonObject record = new JsonObject();
+		record.addProperty("timestamp", timestamp);
+		record.addProperty("modelId", modelId);
+		record.addProperty("promptTokens", promptTokens);
+		record.addProperty("maxTokens", maxTokens);
+		record.addProperty("llamaBinPath", llamaBinPath);
+		record.addProperty("cpu", cpu);
+		if (ram == null) {
+			record.add("ram", null);
+		} else {
+			record.addProperty("ram", ram);
+		}
+		record.addProperty("cmd", cmd);
+		JsonArray devices = new JsonArray();
+		if (deviceList != null) {
+			for (String device : deviceList) {
+				devices.add(device);
+			}
+		}
+		record.add("devices", devices);
+		record.add("timings", timingsObj == null ? new JsonObject() : timingsObj.deepCopy());
+		try (FileOutputStream fos = new FileOutputStream(outFile, true)) {
+			String line = JsonUtil.toJson(record) + System.lineSeparator();
+			fos.write(line.getBytes(StandardCharsets.UTF_8));
+		}
+		return outFile;
+	}
+
+	private Long toGbFromKb(long kb) {
+		if (kb <= 0) return null;
+		return kb / (1024L * 1024L);
+	}
+	
+	/**
+	 * 	
+	 * @param process
+	 * @return
+	 */
+	private List<String> findDevicesInUse(LlamaCppProcess process) {
+		// 找到llamacpp的路径
+		final String llamaBinPath = process == null ? null : process.getLlamaBinPath();
+		// 这个集合中的内容参考：Vulkan0: AMD Radeon(TM) Graphics (16253 MiB, 15440 MiB free)
+		List<String> deviceList = LlamaServerManager.getInstance().handleListDevices(llamaBinPath);
+		// 如果使用了指定的设备
+		String cmd = process.getCmd();
+		if(cmd.contains("--device")) {
+			Pattern pattern = Pattern.compile("--device\\s+(\\S+)");
+			Matcher matcher = pattern.matcher(cmd);
+			String devices = null;
+	        if (matcher.find()) {
+	        	devices = matcher.group(1).toLowerCase();
+	        }
+	        // 被启用的设备
+			String[] deviceArray = devices.split(",");
+			//
+			Set<String> enabledDeviceNames = Arrays.stream(deviceArray)
+		            .map(String::trim)
+		            .collect(Collectors.toSet());
+			return deviceList.stream()
+					.filter(deviceInfo -> {
+						String deviceName = deviceInfo.split(":")[0].trim();
+						return enabledDeviceNames.contains(deviceName.toLowerCase());
+					})
+					.collect(Collectors.toList());
+		}else {
+			return deviceList;
 		}
 	}
 	
@@ -220,11 +306,18 @@ public class BenchmarkService {
 		}
 		BenchmarkTokenOptions opt = options == null ? new BenchmarkTokenOptions() : options;
 		String finalModelId = resolveModelId(modelId);
-		JsonArray workingMessages = messages == null ? new JsonArray() : messages.deepCopy();
-		JsonObject targetMsg = ensureUserMessage(workingMessages);
+		JsonArray templateMessages = messages == null ? new JsonArray() : messages.deepCopy();
+		ensureUserMessage(templateMessages);
+		int targetUserIndex = findLastUserMessageIndex(templateMessages);
+		JsonObject targetMsg = targetUserIndex >= 0 && targetUserIndex < templateMessages.size()
+				? templateMessages.get(targetUserIndex).getAsJsonObject()
+				: null;
 		String baseContent = readMessageContent(targetMsg);
+		int maxUnitsPerMessage = Math.max(0, opt.maxUnitsPerMessage);
 		
-		PromptTokenResult base = countPromptTokens(finalModelId, workingMessages, opt.addSpecial, opt.parseSpecial);
+		JsonArray baseMessages = buildMessagesWithUnits(templateMessages, targetUserIndex, baseContent, opt.unitText, 0,
+				maxUnitsPerMessage);
+		PromptTokenResult base = countPromptTokens(finalModelId, baseMessages, opt.addSpecial, opt.parseSpecial);
 		int baseTokens = base.tokenCount;
 		if (baseTokens >= targetTokens) {
 			JsonObject out = new JsonObject();
@@ -235,13 +328,15 @@ public class BenchmarkService {
 			out.addProperty("content", baseContent);
 			out.addProperty("prompt", base.prompt);
 			out.addProperty("iterations", 0);
+			out.add("messages", baseMessages.deepCopy());
+			out.addProperty("messageCount", baseMessages.size());
 			return out;
 		}
 		
 		int sampleCount = Math.max(1, opt.sampleCount);
-		String sampleText = repeatUnit(opt.unitText, sampleCount);
-		setMessageContent(targetMsg, baseContent + sampleText);
-		PromptTokenResult sample = countPromptTokens(finalModelId, workingMessages, opt.addSpecial, opt.parseSpecial);
+		JsonArray sampleMessages = buildMessagesWithUnits(templateMessages, targetUserIndex, baseContent, opt.unitText,
+				sampleCount, maxUnitsPerMessage);
+		PromptTokenResult sample = countPromptTokens(finalModelId, sampleMessages, opt.addSpecial, opt.parseSpecial);
 		int delta = sample.tokenCount - baseTokens;
 		if (delta <= 0) {
 			delta = sampleCount;
@@ -253,8 +348,9 @@ public class BenchmarkService {
 		
 		int expand = 0;
 		while (expand < 8) {
-			setMessageContent(targetMsg, baseContent + repeatUnit(opt.unitText, high));
-			PromptTokenResult r = countPromptTokens(finalModelId, workingMessages, opt.addSpecial, opt.parseSpecial);
+			JsonArray candidateMessages = buildMessagesWithUnits(templateMessages, targetUserIndex, baseContent,
+					opt.unitText, high, maxUnitsPerMessage);
+			PromptTokenResult r = countPromptTokens(finalModelId, candidateMessages, opt.addSpecial, opt.parseSpecial);
 			if (r.tokenCount >= targetTokens) {
 				break;
 			}
@@ -267,8 +363,9 @@ public class BenchmarkService {
 		int iterations = 0;
 		while (low <= high && iterations < opt.maxIterations) {
 			int mid = low + (high - low) / 2;
-			setMessageContent(targetMsg, baseContent + repeatUnit(opt.unitText, mid));
-			PromptTokenResult r = countPromptTokens(finalModelId, workingMessages, opt.addSpecial, opt.parseSpecial);
+			JsonArray candidateMessages = buildMessagesWithUnits(templateMessages, targetUserIndex, baseContent,
+					opt.unitText, mid, maxUnitsPerMessage);
+			PromptTokenResult r = countPromptTokens(finalModelId, candidateMessages, opt.addSpecial, opt.parseSpecial);
 			iterations++;
 			if (r.tokenCount == targetTokens) {
 				bestUnits = mid;
@@ -289,8 +386,9 @@ public class BenchmarkService {
 			int start = Math.max(bestUnits + 1, 1);
 			int limit = bestUnits + 16;
 			for (int i = start; i <= limit; i++) {
-				setMessageContent(targetMsg, baseContent + repeatUnit(opt.unitText, i));
-				PromptTokenResult r = countPromptTokens(finalModelId, workingMessages, opt.addSpecial, opt.parseSpecial);
+				JsonArray candidateMessages = buildMessagesWithUnits(templateMessages, targetUserIndex, baseContent,
+						opt.unitText, i, maxUnitsPerMessage);
+				PromptTokenResult r = countPromptTokens(finalModelId, candidateMessages, opt.addSpecial, opt.parseSpecial);
 				iterations++;
 				if (r.tokenCount >= targetTokens) {
 					bestUnits = i;
@@ -306,11 +404,9 @@ public class BenchmarkService {
 		}
 		
 		String finalContent = baseContent + repeatUnit(opt.unitText, bestUnits);
-		setMessageContent(targetMsg, finalContent);
-		PromptTokenResult finalResult = bestResult;
-		if (finalResult.prompt == null || finalResult.tokenCount != bestTokens) {
-			finalResult = countPromptTokens(finalModelId, workingMessages, opt.addSpecial, opt.parseSpecial);
-		}
+		JsonArray finalMessages = buildMessagesWithUnits(templateMessages, targetUserIndex, baseContent, opt.unitText,
+				bestUnits, maxUnitsPerMessage);
+		PromptTokenResult finalResult = countPromptTokens(finalModelId, finalMessages, opt.addSpecial, opt.parseSpecial);
 		
 		JsonObject out = new JsonObject();
 		out.addProperty("modelId", finalModelId);
@@ -321,6 +417,8 @@ public class BenchmarkService {
 		out.addProperty("prompt", finalResult.prompt);
 		out.addProperty("iterations", iterations);
 		out.addProperty("unitText", opt.unitText);
+		out.add("messages", finalMessages.deepCopy());
+		out.addProperty("messageCount", finalMessages.size());
 		return out;
 	}
 	
@@ -455,13 +553,6 @@ public class BenchmarkService {
 			return "";
 		}
 	}
-
-	private static JsonArray normalizeMessages(JsonElement el) {
-		if (el != null && el.isJsonArray()) {
-			return el.getAsJsonArray().deepCopy();
-		}
-		return new JsonArray();
-	}
 	
 	private JsonObject ensureUserMessage(JsonArray messages) {
 		JsonObject lastUser = null;
@@ -486,6 +577,53 @@ public class BenchmarkService {
 			messages.add(lastUser);
 		}
 		return lastUser;
+	}
+
+	private int findLastUserMessageIndex(JsonArray messages) {
+		if (messages == null) return -1;
+		for (int i = messages.size() - 1; i >= 0; i--) {
+			JsonElement el = messages.get(i);
+			if (el == null || !el.isJsonObject()) continue;
+			JsonObject obj = el.getAsJsonObject();
+			if ("user".equals(readString(obj.get("role")))) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private JsonArray buildMessagesWithUnits(JsonArray templateMessages, int targetUserIndex, String baseContent,
+			String unitText, int units, int maxUnitsPerMessage) {
+		JsonArray out = templateMessages == null ? new JsonArray() : templateMessages.deepCopy();
+		int index = targetUserIndex;
+		if (index < 0 || index >= out.size() || !out.get(index).isJsonObject()) {
+			ensureUserMessage(out);
+			index = findLastUserMessageIndex(out);
+		}
+		JsonObject targetMsg = index >= 0 && index < out.size() && out.get(index).isJsonObject()
+				? out.get(index).getAsJsonObject()
+				: null;
+		if (targetMsg == null) {
+			targetMsg = new JsonObject();
+			targetMsg.addProperty("role", "user");
+			targetMsg.addProperty("content", "");
+			out.add(targetMsg);
+		}
+		int cap = maxUnitsPerMessage <= 0 ? Integer.MAX_VALUE : Math.max(1, maxUnitsPerMessage);
+		int remaining = Math.max(0, units);
+		int firstUnits = Math.min(remaining, cap);
+		String firstContent = (baseContent == null ? "" : baseContent) + repeatUnit(unitText, firstUnits);
+		setMessageContent(targetMsg, firstContent);
+		remaining -= firstUnits;
+		while (remaining > 0) {
+			int chunk = Math.min(remaining, cap);
+			JsonObject extraMsg = new JsonObject();
+			extraMsg.addProperty("role", "user");
+			extraMsg.addProperty("content", repeatUnit(unitText, chunk));
+			out.add(extraMsg);
+			remaining -= chunk;
+		}
+		return out;
 	}
 	
 	private String readMessageContent(JsonObject msg) {
